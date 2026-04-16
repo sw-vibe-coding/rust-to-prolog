@@ -1,0 +1,12 @@
+number = 2
+slug = "port-helpers"
+status = "pending"
+description = """
+Implement the port-awareness primitives in src/port/.
+
+Purpose: these are the..."""
+role = "production"
+context_files = []
+created_at = "2026-04-16T13:06:33"
+task_type = "rust-module"
+commits = []

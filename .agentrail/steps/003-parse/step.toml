@@ -1,0 +1,12 @@
+number = 3
+slug = "parse"
+status = "pending"
+description = """
+Implement src/parse.rs.
+
+Input: BoundedArr<Token, 512> (from tokenize). Outpu..."""
+role = "production"
+context_files = []
+created_at = "2026-04-16T13:06:54"
+task_type = "rust-module"
+commits = []

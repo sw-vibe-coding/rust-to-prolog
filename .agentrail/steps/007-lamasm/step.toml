@@ -1,0 +1,12 @@
+number = 7
+slug = "lamasm"
+status = "pending"
+description = """
+Implement src/asm.rs and src/bin/lamasm.rs: a two-pass .lam assembler.
+
+Input..."""
+role = "production"
+context_files = []
+created_at = "2026-04-16T13:08:31"
+task_type = "rust-module"
+commits = []

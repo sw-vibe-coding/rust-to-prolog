@@ -1,0 +1,12 @@
+number = 4
+slug = "tokenize"
+status = "pending"
+description = """
+Implement src/tokenize.rs.
+
+NOTE: this step was originally planned BEFORE 003..."""
+role = "production"
+context_files = []
+created_at = "2026-04-16T13:08:00"
+task_type = "rust-module"
+commits = []

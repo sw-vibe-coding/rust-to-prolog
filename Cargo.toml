@@ -1,0 +1,20 @@
+[package]
+name = "rust-to-prolog"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Rust port of a SNOBOL4 Prolog compiler targeting the LAM VM"
+publish = false
+
+[dependencies]
+thiserror = "1"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+
+[[bin]]
+name = "prologc"
+path = "src/bin/prologc.rs"
+
+[[bin]]
+name = "lamasm"
+path = "src/bin/lamasm.rs"
