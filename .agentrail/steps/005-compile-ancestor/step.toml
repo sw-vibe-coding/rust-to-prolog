@@ -1,6 +1,6 @@
 number = 5
 slug = "compile-ancestor"
-status = "pending"
+status = "in-progress"
 description = """
 Implement src/compile.rs sufficient for examples/ancestor.pl.
 
