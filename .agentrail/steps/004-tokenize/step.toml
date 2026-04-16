@@ -1,6 +1,6 @@
 number = 4
 slug = "tokenize"
-status = "pending"
+status = "in-progress"
 description = """
 Implement src/tokenize.rs.
 
