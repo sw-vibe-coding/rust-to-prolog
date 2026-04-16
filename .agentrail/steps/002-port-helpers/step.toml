@@ -1,6 +1,6 @@
 number = 2
 slug = "port-helpers"
-status = "pending"
+status = "in-progress"
 description = """
 Implement the port-awareness primitives in src/port/.
 
