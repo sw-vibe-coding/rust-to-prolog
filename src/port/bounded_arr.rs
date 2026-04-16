@@ -5,7 +5,7 @@
 
 use super::error::PortError;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BoundedArr<T: Copy, const N: usize> {
     data: [Option<T>; N],
     len: usize,

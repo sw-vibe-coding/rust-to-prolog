@@ -1,6 +1,6 @@
 number = 3
 slug = "parse"
-status = "pending"
+status = "in-progress"
 description = """
 Implement src/parse.rs.
 
