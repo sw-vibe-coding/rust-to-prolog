@@ -1,6 +1,6 @@
 number = 11
 slug = "integration-ancestor"
-status = "pending"
+status = "blocked"
 description = "End-to-end integration test: examples/ancestor.pl compiled by Rust pipeline r..."
 role = "validation"
 context_files = []

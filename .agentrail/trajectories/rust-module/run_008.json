@@ -1,0 +1,11 @@
+{
+  "task_type": "rust-module",
+  "state": {
+    "number": 10,
+    "step": "compile-alloc"
+  },
+  "action": "cargo test + scripts/run-tests.sh green gate; traced the broken CP semantics on the old ancestor.lam by hand before coding to confirm the bug (CALL parent_entry in ancestor_c2_body clobbers CP before the tail-call EXECUTE ancestor_entry, so parent's PROCEED returns into the middle of the caller's own body); classical WAM chunk-based classifier with VarRole::Temp/Perm pre-assigned by walking head then body in order; scratch X-reg at index n_temp reused across first-occ perm emissions (safe because each is immediately saved to Y); restore_top takes a FnMut callback for env truncation so the choice module doesn't need to know about EnvFrame; regenerated both golden fixtures so the byte-diff tests still pass; added compiled_ancestor_runs_on_refvm + compiled_ancestor_fails_when_no_solution as regression tests for the fix.",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-17T12:52:58"
+}
