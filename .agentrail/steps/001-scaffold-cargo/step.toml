@@ -1,6 +1,6 @@
 number = 1
 slug = "scaffold-cargo"
-status = "in-progress"
+status = "completed"
 description = """
 Scaffold the Rust workspace per docs/architecture.md §'Module layout'.
 
@@ -8,5 +8,6 @@ Deli..."""
 role = "production"
 context_files = []
 created_at = "2026-04-16T13:06:13"
+completed_at = "2026-04-16T13:46:59"
 task_type = "scaffold"
-commits = []
+commits = ["cc04ed8dfa0837fc5654c63307354c61521ee568"]

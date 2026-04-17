@@ -1,0 +1,11 @@
+{
+  "task_type": "rust-module",
+  "state": {
+    "number": 7,
+    "step": "lamasm"
+  },
+  "action": "cargo test + scripts/run-tests.sh green gate; derived cell layout by reading lam_asm.py + asm-spec.md; hand-verified label addresses 0..48 for ancestor.lam against Python --hex output before writing encoder; generated ancestor.bin via python3 lam_asm.py --raw piped through struct.pack('<I', ..); broke dispatcher into 9-shape classifier (NoOp/Lbl/AiConst/AiStruct/XnAi/YiAi/Alloc/Reg1) so each emit_* helper stays under the 50-line port-audit rule; added GET_STRUCT encoding not present in lam_asm.py (opcode 19 with arity in op2, tagged atom immediate) per asm-spec.md.",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-17T12:01:08"
+}

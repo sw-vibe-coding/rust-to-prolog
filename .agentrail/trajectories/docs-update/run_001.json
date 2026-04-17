@@ -1,0 +1,11 @@
+{
+  "task_type": "docs-update",
+  "state": {
+    "number": 8,
+    "step": "docs-refresh"
+  },
+  "action": "Prior session wrote the new doc under an out-of-order step tail (018); this session used the new 'agentrail reorder 18 --to 8' to move it into position, putting cursor on the docs step by preemption semantics; commit cf8a6f4 already in HEAD captured by 'agentrail complete'.",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-17T12:20:39"
+}

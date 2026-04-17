@@ -1,0 +1,11 @@
+{
+  "task_type": "rust-module",
+  "state": {
+    "number": 6,
+    "step": "emit-lam"
+  },
+  "action": "cargo test green gate; traced compile.rs output by hand for ancestor.pl to produce the golden fixture; blank-line discipline keyed on *_body/*_entry/query labels and atom-dir boundary; TRUST emitted without its internal label operand per asm-spec.md; tests/integration.rs uses #[path] to pick up tests/integration/ancestor.rs per docs/architecture.md layout",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-16T17:12:20"
+}

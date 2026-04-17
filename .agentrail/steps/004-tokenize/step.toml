@@ -1,6 +1,6 @@
 number = 4
 slug = "tokenize"
-status = "in-progress"
+status = "completed"
 description = """
 Implement src/tokenize.rs.
 
@@ -8,5 +8,6 @@ NOTE: this step was originally planned BEFORE 003..."""
 role = "production"
 context_files = []
 created_at = "2026-04-16T13:08:00"
+completed_at = "2026-04-16T14:17:53"
 task_type = "rust-module"
-commits = []
+commits = ["aeaf8af05d3e36b97eee6168ebfa9294890b6798"]

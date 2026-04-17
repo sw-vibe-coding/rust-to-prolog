@@ -1,0 +1,11 @@
+{
+  "task_type": "rust-module",
+  "state": {
+    "number": 3,
+    "step": "parse"
+  },
+  "action": "cargo test + scripts/run-tests.sh as the green gate; hand-crafted Token streams for tests since step 004 hasn't built the tokenizer; used per-clause flat arena addressed by TermIdx u8 instead of literal BoundedArr<Term,8> to satisfy Rust sizedness",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-16T14:06:33"
+}

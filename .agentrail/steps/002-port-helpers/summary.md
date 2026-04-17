@@ -1,0 +1,1 @@
+Implemented port/ primitives: Vmap<N>, BoundedArr<T,N>, BoundedStr<N>, PortError. No unsafe, no HashMap, no Vec. 17 unit tests pass; tokenize stub imports the API.

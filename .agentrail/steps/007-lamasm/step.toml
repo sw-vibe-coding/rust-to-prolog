@@ -1,6 +1,6 @@
 number = 7
 slug = "lamasm"
-status = "in-progress"
+status = "completed"
 description = """
 Implement src/asm.rs and src/bin/lamasm.rs: a two-pass .lam assembler.
 
@@ -8,5 +8,6 @@ Input..."""
 role = "production"
 context_files = []
 created_at = "2026-04-16T13:08:31"
+completed_at = "2026-04-17T12:01:08"
 task_type = "rust-module"
-commits = []
+commits = ["9868431e3b06d1a67b435a49535a819929e7e631"]

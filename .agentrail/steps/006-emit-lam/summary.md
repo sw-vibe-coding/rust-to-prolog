@@ -1,0 +1,1 @@
+emit.rs formats Instr stream to .lam text; byte-diff integration test vs tests/fixtures/ancestor.lam (per-spec golden, not codegen.sno capture)

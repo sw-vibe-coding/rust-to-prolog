@@ -1,6 +1,6 @@
 number = 2
 slug = "port-helpers"
-status = "in-progress"
+status = "completed"
 description = """
 Implement the port-awareness primitives in src/port/.
 
@@ -8,5 +8,6 @@ Purpose: these are the..."""
 role = "production"
 context_files = []
 created_at = "2026-04-16T13:06:33"
+completed_at = "2026-04-16T13:54:45"
 task_type = "rust-module"
-commits = []
+commits = ["d8cbb6186bd639205314ec343fe9f2fa0991ca6e"]

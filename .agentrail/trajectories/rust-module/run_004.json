@@ -1,0 +1,11 @@
+{
+  "task_type": "rust-module",
+  "state": {
+    "number": 5,
+    "step": "compile-ancestor"
+  },
+  "action": "cargo test + scripts/run-tests.sh as green gate; ran codegen.sno on ancestor.pl to derive the reference label scheme (pred_cK_body vs pred_N from stale design.md); hand-counted 46-instruction pin since atom-dir count differs from codegen.sno's hardcoded 10-atom preamble; deferred Y-register classification + ALLOCATE/DEALLOCATE because ancestor.pl under LAM VM semantics (X-regs preserved across CALL) doesn't need them; errored cleanly on un-needed subsets (HeadVarRepeat/StructArg/IntArg) so later steps can extend without reshaping",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-16T15:22:59"
+}

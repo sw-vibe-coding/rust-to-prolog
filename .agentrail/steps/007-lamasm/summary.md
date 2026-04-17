@@ -1,0 +1,1 @@
+Two-pass LAM assembler (src/asm.rs) mirrors lam_asm.py byte-for-byte; CLI in src/bin/lamasm.rs writes flat LE-u32 cells (stdout or -o), --verbose dumps cells to stderr; integration test byte-matches tests/fixtures/ancestor.bin generated from lam_asm.py --raw.

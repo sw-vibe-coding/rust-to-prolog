@@ -1,0 +1,12 @@
+number = 13
+slug = "arithmetic"
+status = "pending"
+description = """
+Add arithmetic builtins: is/2, </2, >/2.
+
+Recognize in compile.rs; emit B_IS_..."""
+role = "production"
+context_files = []
+created_at = "2026-04-16T13:09:06"
+task_type = "rust-module"
+commits = []

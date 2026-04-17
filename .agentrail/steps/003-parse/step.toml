@@ -1,6 +1,6 @@
 number = 3
 slug = "parse"
-status = "in-progress"
+status = "completed"
 description = """
 Implement src/parse.rs.
 
@@ -8,5 +8,6 @@ Input: BoundedArr<Token, 512> (from tokenize). Outpu..."""
 role = "production"
 context_files = []
 created_at = "2026-04-16T13:06:54"
+completed_at = "2026-04-16T14:06:33"
 task_type = "rust-module"
-commits = []
+commits = ["5d92df9a4d62d4f7ceb42644a1bd48b22c6fd4eb"]

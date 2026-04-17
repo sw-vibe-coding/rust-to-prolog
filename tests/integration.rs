@@ -7,3 +7,6 @@ mod ancestor;
 
 #[path = "integration/asm.rs"]
 mod asm;
+
+#[path = "integration/refvm_scenarios.rs"]
+mod refvm_scenarios;

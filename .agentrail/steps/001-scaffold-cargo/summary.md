@@ -1,0 +1,1 @@
+Scaffolded the cargo workspace: lib + two binary stubs, empty module files for tokenize/parse/compile/emit/asm/port/refvm, .gitignore, scripts/port-audit.sh (stub) and scripts/run-tests.sh, examples/ancestor.pl copied from sw-cor24-prolog, and a one-paragraph README. cargo build is warning-free, cargo test reports 0/0, both scripts exit 0.

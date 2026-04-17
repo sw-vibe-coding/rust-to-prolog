@@ -1,0 +1,1 @@
+Refreshed docs/demo-plan-status.md for the rust-to-prolog saga: drops the stale upstream snapshot, adds short status page with 7/17 step progress, demo menu indexed by step dependency, and framing that SNOBOL4/PL/SW port is a downstream saga.

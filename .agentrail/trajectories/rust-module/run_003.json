@@ -1,0 +1,11 @@
+{
+  "task_type": "rust-module",
+  "state": {
+    "number": 4,
+    "step": "tokenize"
+  },
+  "action": "cargo test + scripts/run-tests.sh as green gate; hand-counted ancestor.pl token count (58 including EOF) and pinned as ANCESTOR_TOKEN_COUNT; kept Token::Query despite step prompt omitting it, since parse.rs already depends on it; split next_token into punct_token + scan_* helpers to stay under 50-line rule",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-16T14:17:53"
+}
