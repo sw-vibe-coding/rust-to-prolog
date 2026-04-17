@@ -1,0 +1,54 @@
+.atom 0 parent
+.atom 1 bob
+.atom 2 ann
+.atom 3 liz
+.atom 4 ancestor
+
+    EXECUTE query
+
+parent_c1_body:
+    GET_CONST A0, atom(bob)
+    GET_CONST A1, atom(ann)
+    PROCEED
+
+parent_c2_body:
+    GET_CONST A0, atom(ann)
+    GET_CONST A1, atom(liz)
+    PROCEED
+
+parent_entry:
+    TRY parent_c2
+    EXECUTE parent_c1_body
+parent_c2:
+    TRUST
+    EXECUTE parent_c2_body
+
+ancestor_c1_body:
+    GET_VAR X0, A0
+    GET_VAR X1, A1
+    PUT_VAL X0, A0
+    PUT_VAL X1, A1
+    EXECUTE parent_entry
+
+ancestor_c2_body:
+    GET_VAR X0, A0
+    GET_VAR X1, A1
+    PUT_VAL X0, A0
+    PUT_VAR X2, A1
+    CALL parent_entry
+    PUT_VAL X2, A0
+    PUT_VAL X1, A1
+    EXECUTE ancestor_entry
+
+ancestor_entry:
+    TRY ancestor_c2
+    EXECUTE ancestor_c1_body
+ancestor_c2:
+    TRUST
+    EXECUTE ancestor_c2_body
+
+query:
+    PUT_CONST A0, atom(bob)
+    PUT_CONST A1, atom(liz)
+    CALL ancestor_entry
+    HALT

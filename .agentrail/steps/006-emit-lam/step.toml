@@ -1,6 +1,6 @@
 number = 6
 slug = "emit-lam"
-status = "pending"
+status = "in-progress"
 description = """
 Implement src/emit.rs to format BoundedArr<Instr, 2048> into .lam text.
 
