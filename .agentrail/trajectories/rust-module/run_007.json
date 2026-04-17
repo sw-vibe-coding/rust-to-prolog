@@ -1,0 +1,11 @@
+{
+  "task_type": "rust-module",
+  "state": {
+    "number": 9,
+    "step": "refvm-core"
+  },
+  "action": "cargo test + scripts/run-tests.sh green gate; read sw-cor24-prolog/docs/vm-spec.md to pin cell encoding (3-bit tag, 21-bit payload), ChoicePt 14-cell frame layout, CALL/PROCEED/EXECUTE CP semantics; hand-traced ancestor.lam to discover the missing ALLOCATE bug before writing refvm (bug is semantic — CALL parent_entry clobbers CP before tail-call EXECUTE ancestor_entry), escalated to step 010 rather than fixing compile.rs out of scope; designed refvm tests around hand-crafted .lam (same pattern sw-cor24-prolog's self-tests use) so 009 doesn't depend on the compile.rs fix; split dispatch into per-opcode exec_* helpers to keep each function short; wired B_WRITE/B_NL to io::Write so scenario tests can assert captured bytes.",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-17T12:30:38"
+}

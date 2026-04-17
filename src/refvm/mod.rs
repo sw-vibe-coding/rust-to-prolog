@@ -44,6 +44,10 @@ pub enum RunError {
     BadRegister { op: u8 },
     #[error("empty choice stack on restore")]
     EmptyChoiceStack,
+    #[error("empty env stack (ALLOCATE/DEALLOCATE imbalance)")]
+    EmptyEnvStack,
+    #[error("bad Y-slot index {y}")]
+    BadYSlot { y: u8 },
     #[error("tick limit exceeded (runaway guard)")]
     TickLimit,
     #[error("io error writing builtin output")]
@@ -64,6 +68,12 @@ pub enum Step {
     Fail,
 }
 
+#[derive(Clone, Debug)]
+pub struct EnvFrame {
+    pub saved_cp: usize,
+    pub ys: Vec<u32>,
+}
+
 pub struct Vm {
     pub code: Vec<u32>,
     pub heap: Vec<u32>,
@@ -72,6 +82,7 @@ pub struct Vm {
     pub pc: usize,
     pub cp: usize,
     pub choice: Vec<choice::ChoicePt>,
+    pub env: Vec<EnvFrame>,
     pub tick_limit: u64,
 }
 
@@ -85,6 +96,7 @@ impl Vm {
             pc: 0,
             cp: 0,
             choice: Vec::new(),
+            env: Vec::new(),
             tick_limit: DEFAULT_TICK_LIMIT,
         }
     }

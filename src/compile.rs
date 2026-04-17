@@ -1,21 +1,39 @@
 //! WAM-style compilation: `Clause` stream to `Instr` stream.
 //!
-//! Mirrors the `codegen.sno` algorithm for the ancestor subset:
-//! per-clause VMap assigning each variable slot an X-register on first
-//! occurrence; all head/body var references reuse that mapping. Multi-
-//! clause predicates get a `TRY/RETRY/TRUST` dispatcher under
-//! `pred_entry`. Clause bodies land at `pred_cK_body` labels and the
-//! query at `query:`. Atom directives are emitted for every interned
-//! atom (ordered by AtomId), followed by an initial `EXECUTE query`.
+//! Algorithm for the ancestor family (facts, single-body rules,
+//! multi-body recursive rules, multi-clause dispatch):
 //!
-//! Y-register classification plus `ALLOCATE`/`DEALLOCATE` is deferred:
-//! ancestor.pl under LAM VM semantics (X-registers preserved across
-//! `CALL`) does not need them. Later steps slot in `GetStruct`,
-//! `UnifyVar`, `UnifyVal`, `Cut`, `Fail`, and the `B_*` variants.
+//! 1. **Chunk-based variable classification.** A clause body of `n`
+//!    goals has `max(1, n)` chunks: chunk 0 is `{head, body[0]}`,
+//!    chunk k≥1 is `body[k]`. A variable appearing in more than one
+//!    chunk is *permanent* (lives in a Y-reg inside the environment
+//!    frame and survives across CALL); otherwise it is *temporary*
+//!    (lives in an X-reg and may be clobbered by the callee).
+//! 2. **Register assignment.** Walk head, then body in order. Assign
+//!    Y-indices to permanent vars and X-indices to temporaries in
+//!    order of first occurrence. A single spare X-reg (index
+//!    `n_temp`) is reused as a scratch for `PUT_VAR` when a permanent
+//!    var first appears as a body goal argument.
+//! 3. **Code emission.** At the top of a rule body that has any
+//!    permanent vars, emit `ALLOCATE n_perm`. Head args use
+//!    `GET_CONST` / `GET_VAR` / `GET_Y_VAR` by role. Body goal args
+//!    use `PUT_CONST` / `PUT_VAR` / `PUT_VAL` / `PUT_Y_VAL` plus the
+//!    `PUT_VAR scratch, Ai; GET_Y_VAR Yj, Ai` pair for a permanent
+//!    var's first occurrence in a body arg. Non-final goals emit
+//!    `CALL`; the final goal emits `DEALLOCATE` (when an env frame is
+//!    open) followed by `EXECUTE`.
+//!
+//! Labels: `pred_cK_body` per clause, `pred_entry` per predicate
+//! (dispatcher `TRY` / `RETRY` / `TRUST` chain), `query` for the
+//! initial goal. Atom directives are emitted in interned order.
+//!
+//! Deferred (later steps): `GET_STRUCT` / `UNIFY_*` for lists and
+//! structures (012), `B_IS_*` / `B_LT` / `B_GT` for arithmetic (013),
+//! `CUT` (014).
 
 use crate::parse::{
     AtomId, AtomTable, Clause, ClauseKind, Term, TermIdx, VarSlot,
-    MAX_ARGS, MAX_CLAUSES, MAX_CLAUSE_VARS, NAME_CAP,
+    MAX_ARGS, MAX_BODY, MAX_CLAUSES, MAX_CLAUSE_VARS, NAME_CAP,
 };
 use crate::port::{BoundedArr, BoundedStr};
 use thiserror::Error;
@@ -80,6 +98,8 @@ pub enum CompileError {
     TooManyVars,
     #[error("too many X-registers in clause")]
     TooManyXRegs,
+    #[error("too many Y-registers in clause")]
+    TooManyYRegs,
     #[error("query must contain exactly one goal (multi-goal queries deferred)")]
     QueryShape,
     #[error("repeated head var (GET_VAL) not supported in this subset")]
@@ -92,38 +112,55 @@ pub enum CompileError {
     EmptyBody,
 }
 
-const SENTINEL_X: u8 = u8::MAX;
+const REG_CAP: u8 = 8;
 
-struct XMap {
-    slot_to_x: BoundedArr<u8, MAX_CLAUSE_VARS>,
-    next_x: u8,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Class {
+    Unused,
+    Temp,
+    Perm,
 }
 
-impl XMap {
-    fn new() -> Self {
-        let mut slot_to_x: BoundedArr<u8, MAX_CLAUSE_VARS> = BoundedArr::new();
-        for _ in 0..MAX_CLAUSE_VARS {
-            slot_to_x.push(SENTINEL_X).expect("xmap prefill within capacity");
+#[derive(Clone, Copy, Debug)]
+enum VarRole {
+    Unused,
+    Temp { xi: u8, seen: bool },
+    Perm { yi: u8, seen: bool },
+}
+
+struct RegMap {
+    roles: [VarRole; MAX_CLAUSE_VARS],
+    n_temp: u8,
+    n_perm: u8,
+}
+
+impl RegMap {
+    fn empty() -> Self {
+        Self {
+            roles: [VarRole::Unused; MAX_CLAUSE_VARS],
+            n_temp: 0,
+            n_perm: 0,
         }
-        Self { slot_to_x, next_x: 0 }
     }
 
-    fn lookup_or_assign(&mut self, slot: VarSlot) -> Result<(u8, bool), CompileError> {
-        let idx = slot as usize;
-        if idx >= MAX_CLAUSE_VARS {
-            return Err(CompileError::TooManyVars);
-        }
-        let cur = *self.slot_to_x.get(idx).expect("xmap index in range");
-        if cur != SENTINEL_X {
-            return Ok((cur, true));
-        }
-        if self.next_x == SENTINEL_X {
-            return Err(CompileError::TooManyXRegs);
-        }
-        let x = self.next_x;
-        *self.slot_to_x.get_mut(idx).expect("xmap index in range") = x;
-        self.next_x += 1;
-        Ok((x, false))
+    fn get(&self, slot: VarSlot) -> VarRole {
+        self.roles[slot as usize]
+    }
+
+    fn mark_seen(&mut self, slot: VarSlot) {
+        self.roles[slot as usize] = match self.roles[slot as usize] {
+            VarRole::Temp { xi, .. } => VarRole::Temp { xi, seen: true },
+            VarRole::Perm { yi, .. } => VarRole::Perm { yi, seen: true },
+            VarRole::Unused => VarRole::Unused,
+        };
+    }
+
+    fn scratch_x(&self) -> u8 {
+        self.n_temp
+    }
+
+    fn has_env(&self) -> bool {
+        self.n_perm > 0
     }
 }
 
@@ -244,24 +281,142 @@ fn emit_clause_body(
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     push_i(out, Instr::Label(lbl_clause_body(pname, clause_idx)?))?;
-    let mut xm = XMap::new();
-    emit_head(&clause.head, clause, &mut xm, out)?;
+    let classes = classify_clause(clause)?;
+    let mut rm = assign_regs(&classes, clause)?;
+    if rm.has_env() {
+        push_i(out, Instr::Allocate { n: rm.n_perm })?;
+    }
+    emit_head(&clause.head, clause, &mut rm, out)?;
     match clause.kind {
         ClauseKind::Fact => push_i(out, Instr::Proceed),
-        ClauseKind::Rule => emit_body(clause, atoms, &mut xm, out),
+        ClauseKind::Rule => emit_body(clause, atoms, &mut rm, out),
         ClauseKind::Query => Err(CompileError::BadHead),
+    }
+}
+
+fn classify_clause(clause: &Clause) -> Result<[Class; MAX_CLAUSE_VARS], CompileError> {
+    let n_goals = clause.body.len();
+    let n_chunks = if n_goals == 0 { 1 } else { n_goals };
+    let mut hits = [[false; MAX_BODY]; MAX_CLAUSE_VARS];
+    mark_vars(&clause.head, clause, &mut hits, 0)?;
+    if n_goals > 0 {
+        let g0 = *clause.body.get(0).expect("body[0]");
+        mark_vars(&g0, clause, &mut hits, 0)?;
+    }
+    for k in 1..n_goals {
+        let g = *clause.body.get(k).expect("body goal");
+        mark_vars(&g, clause, &mut hits, k)?;
+    }
+    let mut classes = [Class::Unused; MAX_CLAUSE_VARS];
+    for slot in 0..MAX_CLAUSE_VARS {
+        let count = (0..n_chunks).filter(|&c| hits[slot][c]).count();
+        classes[slot] = match count {
+            0 => Class::Unused,
+            1 => Class::Temp,
+            _ => Class::Perm,
+        };
+    }
+    Ok(classes)
+}
+
+fn mark_vars(
+    t: &Term,
+    clause: &Clause,
+    hits: &mut [[bool; MAX_BODY]; MAX_CLAUSE_VARS],
+    chunk: usize,
+) -> Result<(), CompileError> {
+    match t {
+        Term::Var(s) => {
+            if (*s as usize) >= MAX_CLAUSE_VARS {
+                return Err(CompileError::TooManyVars);
+            }
+            hits[*s as usize][chunk] = true;
+            Ok(())
+        }
+        Term::Struct { args, .. } => {
+            for i in 0..args.len() {
+                let ti = *args.get(i).expect("arg in range");
+                let sub = *clause.subterm(ti).ok_or(CompileError::BadSubterm)?;
+                mark_vars(&sub, clause, hits, chunk)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn assign_regs(
+    classes: &[Class; MAX_CLAUSE_VARS],
+    clause: &Clause,
+) -> Result<RegMap, CompileError> {
+    let mut rm = RegMap::empty();
+    walk_assign(&clause.head, clause, classes, &mut rm)?;
+    for i in 0..clause.body.len() {
+        let g = *clause.body.get(i).expect("goal in range");
+        walk_assign(&g, clause, classes, &mut rm)?;
+    }
+    Ok(rm)
+}
+
+fn walk_assign(
+    t: &Term,
+    clause: &Clause,
+    classes: &[Class; MAX_CLAUSE_VARS],
+    rm: &mut RegMap,
+) -> Result<(), CompileError> {
+    match t {
+        Term::Var(s) => assign_slot(*s, classes, rm),
+        Term::Struct { args, .. } => {
+            for i in 0..args.len() {
+                let ti = *args.get(i).expect("arg in range");
+                let sub = *clause.subterm(ti).ok_or(CompileError::BadSubterm)?;
+                walk_assign(&sub, clause, classes, rm)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn assign_slot(
+    slot: VarSlot,
+    classes: &[Class; MAX_CLAUSE_VARS],
+    rm: &mut RegMap,
+) -> Result<(), CompileError> {
+    let ix = slot as usize;
+    if !matches!(rm.roles[ix], VarRole::Unused) {
+        return Ok(());
+    }
+    match classes[ix] {
+        Class::Unused => Ok(()),
+        Class::Temp => {
+            if rm.n_temp >= REG_CAP {
+                return Err(CompileError::TooManyXRegs);
+            }
+            rm.roles[ix] = VarRole::Temp { xi: rm.n_temp, seen: false };
+            rm.n_temp += 1;
+            Ok(())
+        }
+        Class::Perm => {
+            if rm.n_perm >= REG_CAP {
+                return Err(CompileError::TooManyYRegs);
+            }
+            rm.roles[ix] = VarRole::Perm { yi: rm.n_perm, seen: false };
+            rm.n_perm += 1;
+            Ok(())
+        }
     }
 }
 
 fn emit_head(
     head: &Term,
     clause: &Clause,
-    xm: &mut XMap,
+    rm: &mut RegMap,
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     match head {
         Term::Atom(_) => Ok(()),
-        Term::Struct { args, .. } => emit_head_args(args, clause, xm, out),
+        Term::Struct { args, .. } => emit_head_args(args, clause, rm, out),
         _ => Err(CompileError::BadHead),
     }
 }
@@ -269,13 +424,13 @@ fn emit_head(
 fn emit_head_args(
     args: &BoundedArr<TermIdx, MAX_ARGS>,
     clause: &Clause,
-    xm: &mut XMap,
+    rm: &mut RegMap,
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     for i in 0..args.len() {
-        let ti = *args.get(i).expect("arg index in range");
+        let ti = *args.get(i).expect("arg in range");
         let t = *clause.subterm(ti).ok_or(CompileError::BadSubterm)?;
-        emit_head_arg(i as u8, &t, xm, out)?;
+        emit_head_arg(i as u8, &t, rm, out)?;
     }
     Ok(())
 }
@@ -283,29 +438,44 @@ fn emit_head_args(
 fn emit_head_arg(
     ai: u8,
     arg: &Term,
-    xm: &mut XMap,
+    rm: &mut RegMap,
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     match arg {
         Term::Atom(id) => push_i(out, Instr::GetConst { ai, atom: *id }),
-        Term::Var(slot) => {
-            let (xi, seen) = xm.lookup_or_assign(*slot)?;
-            if seen {
-                Err(CompileError::HeadVarRepeat)
-            } else {
-                push_i(out, Instr::GetVar { ai, xi })
-            }
-        }
+        Term::Var(slot) => emit_head_var(ai, *slot, rm, out),
         Term::Int(_) => Err(CompileError::IntArg),
         Term::Struct { .. } => Err(CompileError::StructArg),
         Term::Nil => Err(CompileError::StructArg),
     }
 }
 
+fn emit_head_var(
+    ai: u8,
+    slot: VarSlot,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    match rm.get(slot) {
+        VarRole::Unused => Err(CompileError::TooManyVars),
+        VarRole::Temp { xi, seen: false } => {
+            push_i(out, Instr::GetVar { ai, xi })?;
+            rm.mark_seen(slot);
+            Ok(())
+        }
+        VarRole::Perm { yi, seen: false } => {
+            push_i(out, Instr::GetYVar { ai, yi })?;
+            rm.mark_seen(slot);
+            Ok(())
+        }
+        VarRole::Temp { .. } | VarRole::Perm { .. } => Err(CompileError::HeadVarRepeat),
+    }
+}
+
 fn emit_body(
     clause: &Clause,
     atoms: &AtomTable,
-    xm: &mut XMap,
+    rm: &mut RegMap,
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     let n = clause.body.len();
@@ -313,9 +483,9 @@ fn emit_body(
         return Err(CompileError::EmptyBody);
     }
     for gi in 0..n {
-        let goal = *clause.body.get(gi).expect("goal index in range");
+        let goal = *clause.body.get(gi).expect("goal in range");
         let is_last = gi + 1 == n;
-        emit_goal(&goal, clause, atoms, xm, is_last, out)?;
+        emit_goal(&goal, clause, atoms, rm, is_last, out)?;
     }
     Ok(())
 }
@@ -324,38 +494,40 @@ fn emit_goal(
     goal: &Term,
     clause: &Clause,
     atoms: &AtomTable,
-    xm: &mut XMap,
+    rm: &mut RegMap,
     is_last: bool,
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     let fid = match goal {
         Term::Atom(id) => *id,
         Term::Struct { functor, args } => {
-            emit_put_args(args, clause, xm, out)?;
+            emit_put_args(args, clause, rm, out)?;
             *functor
         }
         _ => return Err(CompileError::BadGoal),
     };
     let pname = *atoms.name(fid).ok_or(CompileError::UnknownAtom)?;
     let entry = lbl_entry(&pname)?;
-    let ctrl = if is_last {
-        Instr::Execute { label: entry }
+    if is_last {
+        if rm.has_env() {
+            push_i(out, Instr::Deallocate)?;
+        }
+        push_i(out, Instr::Execute { label: entry })
     } else {
-        Instr::Call { label: entry }
-    };
-    push_i(out, ctrl)
+        push_i(out, Instr::Call { label: entry })
+    }
 }
 
 fn emit_put_args(
     args: &BoundedArr<TermIdx, MAX_ARGS>,
     clause: &Clause,
-    xm: &mut XMap,
+    rm: &mut RegMap,
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     for i in 0..args.len() {
-        let ti = *args.get(i).expect("arg index in range");
+        let ti = *args.get(i).expect("arg in range");
         let t = *clause.subterm(ti).ok_or(CompileError::BadSubterm)?;
-        emit_put_arg(i as u8, &t, xm, out)?;
+        emit_put_arg(i as u8, &t, rm, out)?;
     }
     Ok(())
 }
@@ -363,22 +535,43 @@ fn emit_put_args(
 fn emit_put_arg(
     ai: u8,
     arg: &Term,
-    xm: &mut XMap,
+    rm: &mut RegMap,
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     match arg {
         Term::Atom(id) => push_i(out, Instr::PutConst { ai, atom: *id }),
-        Term::Var(slot) => {
-            let (xi, seen) = xm.lookup_or_assign(*slot)?;
-            if seen {
-                push_i(out, Instr::PutVal { ai, xi })
-            } else {
-                push_i(out, Instr::PutVar { ai, xi })
-            }
-        }
+        Term::Var(slot) => emit_put_var(ai, *slot, rm, out),
         Term::Int(_) => Err(CompileError::IntArg),
         Term::Struct { .. } => Err(CompileError::StructArg),
         Term::Nil => Err(CompileError::StructArg),
+    }
+}
+
+fn emit_put_var(
+    ai: u8,
+    slot: VarSlot,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    match rm.get(slot) {
+        VarRole::Unused => Err(CompileError::TooManyVars),
+        VarRole::Temp { xi, seen: false } => {
+            push_i(out, Instr::PutVar { ai, xi })?;
+            rm.mark_seen(slot);
+            Ok(())
+        }
+        VarRole::Temp { xi, seen: true } => push_i(out, Instr::PutVal { ai, xi }),
+        VarRole::Perm { yi, seen: false } => {
+            let scratch = rm.scratch_x();
+            if scratch >= REG_CAP {
+                return Err(CompileError::TooManyXRegs);
+            }
+            push_i(out, Instr::PutVar { ai, xi: scratch })?;
+            push_i(out, Instr::GetYVar { ai, yi })?;
+            rm.mark_seen(slot);
+            Ok(())
+        }
+        VarRole::Perm { yi, seen: true } => push_i(out, Instr::PutYVal { ai, yi }),
     }
 }
 
@@ -418,11 +611,12 @@ fn emit_query_clause(
         return Err(CompileError::QueryShape);
     }
     let goal = *clause.body.get(0).expect("single-goal query");
-    let mut xm = XMap::new();
+    let classes = classify_clause(clause)?;
+    let mut rm = assign_regs(&classes, clause)?;
     let fid = match goal {
         Term::Atom(id) => id,
         Term::Struct { functor, args } => {
-            emit_put_args(&args, clause, &mut xm, out)?;
+            emit_put_args(&args, clause, &mut rm, out)?;
             functor
         }
         _ => return Err(CompileError::BadGoal),
@@ -520,13 +714,12 @@ mod tests {
         }
     }
 
-    /// Pinned reference for examples/ancestor.pl. Corresponds to:
-    ///   5 atom dirs + 1 `Execute query` + 14 instrs for parent group
-    ///   + 21 instrs for ancestor group + 5 instrs for query = 46.
-    /// Derived by hand-tracing the codegen.sno algorithm; consistent
-    /// with a codegen.sno run modulo the atom-dir subset we intern
-    /// versus codegen.sno's hardcoded 10-atom preamble.
-    const ANCESTOR_INSTR_COUNT: usize = 46;
+    /// Pinned reference for examples/ancestor.pl with the ALLOCATE /
+    /// DEALLOCATE env frames that the recursive `ancestor_c2` clause
+    /// needs: ancestor_c2_body grows from 9 Instr entries (pre-fix)
+    /// to 12 (adds ALLOCATE, a GET_Y_VAR pair for Z, DEALLOCATE),
+    /// bumping the total from 46 to 49 Instr entries.
+    const ANCESTOR_INSTR_COUNT: usize = 49;
 
     #[test]
     fn compile_ancestor_instruction_count() {
@@ -539,12 +732,10 @@ mod tests {
     fn compile_ancestor_first_and_last_instructions() {
         let src = include_str!("../examples/ancestor.pl");
         let prog = compile_src(src);
-        // First instructions are all AtomDirs.
         match prog.get(0).expect("first") {
             Instr::AtomDir { id, .. } => assert_eq!(*id, 0),
             other => panic!("expected AtomDir, got {other:?}"),
         }
-        // Last instruction is Halt (end of query).
         assert!(matches!(prog.get(prog.len() - 1), Some(Instr::Halt)));
     }
 
@@ -573,8 +764,6 @@ mod tests {
     fn compile_ancestor_initial_execute_query() {
         let src = include_str!("../examples/ancestor.pl");
         let prog = compile_src(src);
-        // atom dirs come first; the instruction after the last AtomDir
-        // is Execute(query).
         let mut after_atoms = 0;
         for i in 0..prog.len() {
             match prog.get(i).unwrap() {
@@ -595,12 +784,8 @@ mod tests {
         let mut atoms = AtomTable::new();
         let clauses = parse(&toks, &mut atoms).expect("parse ok");
         let prog = compile(&clauses, &atoms).expect("compile ok");
-        let ancestor = atom_id(&atoms, "ancestor");
         let bob = atom_id(&atoms, "bob");
         let liz = atom_id(&atoms, "liz");
-        // Scan for the `query:` label and check the three following
-        // instructions: PUT_CONST A0 bob, PUT_CONST A1 liz, CALL
-        // ancestor_entry, HALT.
         let mut qi = None;
         for i in 0..prog.len() {
             if matches!(prog.get(i), Some(Instr::Label(l)) if l.as_str() == "query") {
@@ -622,17 +807,13 @@ mod tests {
             other => panic!("expected Call(ancestor_entry), got {other:?}"),
         }
         assert!(matches!(prog.get(qi + 4), Some(Instr::Halt)));
-        // Query is last: nothing after Halt.
         assert_eq!(qi + 4, prog.len() - 1);
-        // Also assert no stray atom ids in the interned table.
-        let _ = ancestor;
     }
 
     #[test]
-    fn compile_ancestor_c2_body_has_call_parent_then_execute_ancestor() {
+    fn compile_ancestor_c2_body_opens_env_and_emits_y_regs() {
         let src = include_str!("../examples/ancestor.pl");
         let prog = compile_src(src);
-        // Locate `ancestor_c2_body:` label.
         let mut ci = None;
         for i in 0..prog.len() {
             if matches!(
@@ -645,9 +826,77 @@ mod tests {
         }
         let ci = ci.expect("ancestor_c2_body label found");
         // Expected sequence after label:
-        //   GET_VAR X0 A0 ; GET_VAR X1 A1 ; PUT_VAL X0 A0 ;
-        //   PUT_VAR X2 A1 ; CALL parent_entry ;
-        //   PUT_VAL X2 A0 ; PUT_VAL X1 A1 ; EXECUTE ancestor_entry
+        //   ALLOCATE 2
+        //   GET_VAR X0, A0             ; X (temp)
+        //   GET_Y_VAR Y0, A1           ; Y (perm, first-occ in head)
+        //   PUT_VAL X0, A0             ; X (X-seen)
+        //   PUT_VAR X1, A1             ; scratch for Z
+        //   GET_Y_VAR Y1, A1           ; save fresh Z to Y1
+        //   CALL parent_entry
+        //   PUT_Y_VAL Y1, A0           ; Z
+        //   PUT_Y_VAL Y0, A1           ; Y
+        //   DEALLOCATE
+        //   EXECUTE ancestor_entry
+        assert!(matches!(prog.get(ci + 1), Some(Instr::Allocate { n: 2 })));
+        assert!(matches!(
+            prog.get(ci + 2),
+            Some(Instr::GetVar { ai: 0, xi: 0 })
+        ));
+        assert!(matches!(
+            prog.get(ci + 3),
+            Some(Instr::GetYVar { ai: 1, yi: 0 })
+        ));
+        assert!(matches!(
+            prog.get(ci + 4),
+            Some(Instr::PutVal { ai: 0, xi: 0 })
+        ));
+        assert!(matches!(
+            prog.get(ci + 5),
+            Some(Instr::PutVar { ai: 1, xi: 1 })
+        ));
+        assert!(matches!(
+            prog.get(ci + 6),
+            Some(Instr::GetYVar { ai: 1, yi: 1 })
+        ));
+        match prog.get(ci + 7).expect("call parent_entry") {
+            Instr::Call { label } => assert_eq!(label.as_str(), "parent_entry"),
+            other => panic!("expected Call(parent_entry), got {other:?}"),
+        }
+        assert!(matches!(
+            prog.get(ci + 8),
+            Some(Instr::PutYVal { ai: 0, yi: 1 })
+        ));
+        assert!(matches!(
+            prog.get(ci + 9),
+            Some(Instr::PutYVal { ai: 1, yi: 0 })
+        ));
+        assert!(matches!(prog.get(ci + 10), Some(Instr::Deallocate)));
+        match prog.get(ci + 11).expect("execute ancestor_entry") {
+            Instr::Execute { label } => assert_eq!(label.as_str(), "ancestor_entry"),
+            other => panic!("expected Execute(ancestor_entry), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn compile_ancestor_c1_body_has_no_env_frame() {
+        // ancestor_c1 is `ancestor(X, Y) :- parent(X, Y).` — one body
+        // goal, so no chunk boundaries, so no permanent vars, so no
+        // ALLOCATE / DEALLOCATE. Sequence should be head + body
+        // PUT_VAL pair + tail call with no env frame.
+        let src = include_str!("../examples/ancestor.pl");
+        let prog = compile_src(src);
+        let mut ci = None;
+        for i in 0..prog.len() {
+            if matches!(
+                prog.get(i),
+                Some(Instr::Label(l)) if l.as_str() == "ancestor_c1_body"
+            ) {
+                ci = Some(i);
+                break;
+            }
+        }
+        let ci = ci.expect("ancestor_c1_body label found");
+        assert!(!matches!(prog.get(ci + 1), Some(Instr::Allocate { .. })));
         assert!(matches!(
             prog.get(ci + 1),
             Some(Instr::GetVar { ai: 0, xi: 0 })
@@ -656,39 +905,18 @@ mod tests {
             prog.get(ci + 2),
             Some(Instr::GetVar { ai: 1, xi: 1 })
         ));
-        assert!(matches!(
-            prog.get(ci + 3),
-            Some(Instr::PutVal { ai: 0, xi: 0 })
-        ));
-        assert!(matches!(
-            prog.get(ci + 4),
-            Some(Instr::PutVar { ai: 1, xi: 2 })
-        ));
-        match prog.get(ci + 5).expect("call parent_entry") {
-            Instr::Call { label } => assert_eq!(label.as_str(), "parent_entry"),
-            other => panic!("expected Call(parent_entry), got {other:?}"),
-        }
-        assert!(matches!(
-            prog.get(ci + 6),
-            Some(Instr::PutVal { ai: 0, xi: 2 })
-        ));
-        assert!(matches!(
-            prog.get(ci + 7),
-            Some(Instr::PutVal { ai: 1, xi: 1 })
-        ));
-        match prog.get(ci + 8).expect("execute ancestor_entry") {
-            Instr::Execute { label } => assert_eq!(label.as_str(), "ancestor_entry"),
-            other => panic!("expected Execute(ancestor_entry), got {other:?}"),
+        match prog.get(ci + 5).expect("execute parent_entry") {
+            Instr::Execute { label } => assert_eq!(label.as_str(), "parent_entry"),
+            other => panic!("expected Execute(parent_entry), got {other:?}"),
         }
     }
 
     #[test]
     fn compile_single_fact() {
-        // p(a). ?- p(a).
         let prog = compile_src("p(a). ?- p(a).");
-        // atom dirs (p, a) + Execute(query)               = 3
-        //   + p_c1_body label + GET_CONST a + PROCEED     = 3
-        //   + p_entry label + EXECUTE p_c1_body           = 2
+        // atom dirs (p, a) + Execute(query)                = 3
+        //   + p_c1_body label + GET_CONST a + PROCEED      = 3
+        //   + p_entry label + EXECUTE p_c1_body            = 2
         //   + query label + PUT_CONST a + CALL p_entry + HALT = 4
         assert_eq!(prog.len(), 12);
         assert!(matches!(prog.get(0), Some(Instr::AtomDir { id: 0, .. })));
@@ -696,12 +924,9 @@ mod tests {
 
     #[test]
     fn compile_single_clause_predicate_dispatcher_has_no_try() {
-        // p(a). q(X) :- p(X). ?- q(a).
         let prog = compile_src("p(a). q(X) :- p(X). ?- q(a).");
-        // q_entry is single clause: just Label + Execute(q_c1_body).
-        let mut i = 0;
         let mut saw_q_entry = false;
-        while i < prog.len() {
+        for i in 0..prog.len() {
             if matches!(prog.get(i), Some(Instr::Label(l)) if l.as_str() == "q_entry") {
                 saw_q_entry = true;
                 match prog.get(i + 1).expect("after q_entry") {
@@ -710,11 +935,9 @@ mod tests {
                     }
                     other => panic!("expected Execute, got {other:?}"),
                 }
-                // Next must not be a Try.
                 assert!(!matches!(prog.get(i + 1), Some(Instr::Try { .. })));
                 break;
             }
-            i += 1;
         }
         assert!(saw_q_entry);
     }

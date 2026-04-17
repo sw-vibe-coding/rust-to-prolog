@@ -14,7 +14,7 @@
 use super::builtin::{write_nl, write_term};
 use super::choice::{pop, push_choice, restore_top, top_alt, update_alt};
 use super::heap::{alloc_unbound, make_ref, unify};
-use super::{RunError, Step, Vm};
+use super::{EnvFrame, RunError, Step, Vm};
 
 pub const OP_NOP: u8 = 0;
 pub const OP_HALT: u8 = 1;
@@ -28,8 +28,12 @@ pub const OP_TRUST: u8 = 8;
 pub const OP_PUT_VAR: u8 = 10;
 pub const OP_PUT_VAL: u8 = 11;
 pub const OP_PUT_CONST: u8 = 12;
+pub const OP_PUT_Y_VAL: u8 = 13;
 pub const OP_GET_VAR: u8 = 16;
 pub const OP_GET_CONST: u8 = 18;
+pub const OP_GET_Y_VAR: u8 = 20;
+pub const OP_ALLOCATE: u8 = 28;
+pub const OP_DEALLOCATE: u8 = 29;
 pub const OP_B_WRITE: u8 = 32;
 pub const OP_B_NL: u8 = 33;
 
@@ -54,8 +58,12 @@ pub fn step<W: std::io::Write>(vm: &mut Vm, out: &mut W) -> Result<Step, RunErro
         OP_PUT_VAR => exec_put_var(vm, op1, op2),
         OP_PUT_VAL => exec_put_val(vm, op1, op2),
         OP_PUT_CONST => exec_put_const(vm, op1),
+        OP_PUT_Y_VAL => exec_put_y_val(vm, op1, op2),
         OP_GET_VAR => exec_get_var(vm, op1, op2),
         OP_GET_CONST => exec_get_const(vm, op1),
+        OP_GET_Y_VAR => exec_get_y_var(vm, op1, op2),
+        OP_ALLOCATE => exec_allocate(vm, op1),
+        OP_DEALLOCATE => exec_deallocate(vm),
         OP_B_WRITE => exec_b_write(vm, op1, out),
         OP_B_NL => exec_b_nl(vm, out),
         other => Err(RunError::UnsupportedOpcode { op: other, pc: vm.pc }),
@@ -99,6 +107,7 @@ fn exec_try(vm: &mut Vm) -> Result<Step, RunError> {
         vm.cp,
         vm.heap.len(),
         vm.trail.len(),
+        vm.env.len(),
     );
     vm.pc += 2;
     Ok(Step::Continue)
@@ -106,8 +115,11 @@ fn exec_try(vm: &mut Vm) -> Result<Step, RunError> {
 
 fn exec_retry(vm: &mut Vm) -> Result<Step, RunError> {
     let new_alt = read_imm(vm)?;
-    let saved_cp = restore_top(&vm.choice, &mut vm.regs, &mut vm.heap, &mut vm.trail)
-        .ok_or(RunError::EmptyChoiceStack)?;
+    let env_ref = &mut vm.env;
+    let saved_cp = restore_top(&vm.choice, &mut vm.regs, &mut vm.heap, &mut vm.trail, |ep| {
+        env_ref.truncate(ep);
+    })
+    .ok_or(RunError::EmptyChoiceStack)?;
     vm.cp = saved_cp;
     update_alt(&mut vm.choice, new_alt);
     vm.pc += 2;
@@ -115,8 +127,11 @@ fn exec_retry(vm: &mut Vm) -> Result<Step, RunError> {
 }
 
 fn exec_trust(vm: &mut Vm) -> Result<Step, RunError> {
-    let saved_cp = restore_top(&vm.choice, &mut vm.regs, &mut vm.heap, &mut vm.trail)
-        .ok_or(RunError::EmptyChoiceStack)?;
+    let env_ref = &mut vm.env;
+    let saved_cp = restore_top(&vm.choice, &mut vm.regs, &mut vm.heap, &mut vm.trail, |ep| {
+        env_ref.truncate(ep);
+    })
+    .ok_or(RunError::EmptyChoiceStack)?;
     vm.cp = saved_cp;
     pop(&mut vm.choice);
     vm.pc += 1;
@@ -166,6 +181,46 @@ fn exec_get_const(vm: &mut Vm, ai: u8) -> Result<Step, RunError> {
         return exec_fail(vm);
     }
     vm.pc += 2;
+    Ok(Step::Continue)
+}
+
+fn exec_allocate(vm: &mut Vm, n: u8) -> Result<Step, RunError> {
+    vm.env.push(EnvFrame {
+        saved_cp: vm.cp,
+        ys: vec![0u32; n as usize],
+    });
+    vm.pc += 1;
+    Ok(Step::Continue)
+}
+
+fn exec_deallocate(vm: &mut Vm) -> Result<Step, RunError> {
+    let frame = vm.env.pop().ok_or(RunError::EmptyEnvStack)?;
+    vm.cp = frame.saved_cp;
+    vm.pc += 1;
+    Ok(Step::Continue)
+}
+
+fn exec_get_y_var(vm: &mut Vm, yi: u8, ai: u8) -> Result<Step, RunError> {
+    let ai = reg_index(ai)?;
+    let frame = vm.env.last_mut().ok_or(RunError::EmptyEnvStack)?;
+    let y = yi as usize;
+    if y >= frame.ys.len() {
+        return Err(RunError::BadYSlot { y: yi });
+    }
+    frame.ys[y] = vm.regs[ai];
+    vm.pc += 1;
+    Ok(Step::Continue)
+}
+
+fn exec_put_y_val(vm: &mut Vm, yi: u8, ai: u8) -> Result<Step, RunError> {
+    let ai = reg_index(ai)?;
+    let frame = vm.env.last().ok_or(RunError::EmptyEnvStack)?;
+    let y = yi as usize;
+    if y >= frame.ys.len() {
+        return Err(RunError::BadYSlot { y: yi });
+    }
+    vm.regs[ai] = frame.ys[y];
+    vm.pc += 1;
     Ok(Step::Continue)
 }
 

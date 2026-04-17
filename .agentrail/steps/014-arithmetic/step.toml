@@ -1,10 +1,10 @@
-number = 11
-slug = "builtins-io"
+number = 14
+slug = "arithmetic"
 status = "pending"
 description = """
-Add write/1, nl/0, fail/0 builtins to compile.rs and refvm/builtin.rs.
+Add arithmetic builtins: is/2, </2, >/2.
 
-Recog..."""
+Recognize in compile.rs; emit B_IS_..."""
 role = "production"
 context_files = []
 created_at = "2026-04-16T13:09:06"

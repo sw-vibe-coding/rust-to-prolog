@@ -1,0 +1,18 @@
+A girl, Alice, is walking through a mysterious forest and meets two strange creatures: a lion and a unicorn.
+
+Each of them has a fixed pattern of telling the truth or lying:
+
+Lion:
+
+Lies on Monday, Tuesday, Wednesday
+Tells the truth on Thursday, Friday, Saturday, Sunday
+Unicorn:
+
+Lies on Thursday, Friday, Saturday
+Tells the truth on Sunday, Monday, Tuesday, Wednesday
+They make the following statements:
+
+Lion: “Yesterday I was lying.”
+Unicorn: “Yesterday I was lying."
+Determine the day of the week on which Alice met them.
+

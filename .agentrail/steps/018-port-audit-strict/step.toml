@@ -1,4 +1,4 @@
-number = 17
+number = 18
 slug = "port-audit-strict"
 status = "pending"
 description = "Tighten scripts/port-audit.sh to enforce the full rule set from docs/design.m..."
