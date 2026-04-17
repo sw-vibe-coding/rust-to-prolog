@@ -41,19 +41,46 @@ plan in `plan.md`.
 
 | # | Demo | Gated on | Proves |
 |---|------|----------|--------|
-| 1 | Ancestor query returns solution | 008-refvm-core | Full Rust pipeline solves a Prolog query in-process |
-| 2 | Ancestor query on real COR24 VM | 009-integration-ancestor | Same, on the authoritative VM via `cor24-run` |
-| 3 | Color backtracking (`color(X), write(X), nl, fail.`) | 010-builtins-io | `write/1`, `nl/0`, `fail/0` + retry chain |
-| 4 | `member(X, [a,b,c])` | 011-lists | List compilation via `GET_STRUCT`/`UNIFY_*` for `./2` |
-| 5 | Factorial-style recurrence | 012-arithmetic | `is/2`, `</2`, `>/2`, integer builtins |
-| 6 | Cut-pruned choice (`!`) | 013-cut | `CUT` barrier semantics |
-| 7 | Negation-as-failure (`\+ Goal`) | 014-negation | Meta-call + `CUT` + `FAIL` pattern |
-| 8 | "Lion Lies on Tuesdays" puzzle | 015-liar-puzzle | End-to-end logic puzzle on the real VM |
+| 1 | Ancestor query returns solution | 009-refvm-core ✅ | Full Rust pipeline solves a Prolog query in-process |
+| 2 | Ancestor query on real COR24 VM | 019-integration-ancestor (blocked) | Same, on the authoritative VM via `cor24-run` |
+| 3 | Color backtracking (`color(X), write(X), nl, fail.`) | 012-builtins-io | `write/1`, `nl/0`, `fail/0` + retry chain |
+| 4 | `member(X, [a,b,c])` | 013-lists | List compilation via `GET_STRUCT`/`UNIFY_*` for `./2` |
+| 5 | Factorial-style recurrence | 014-arithmetic | `is/2`, `</2`, `>/2`, integer builtins |
+| 6 | Cut-pruned choice (`!`) | 015-cut | `CUT` barrier semantics |
+| 7 | Negation-as-failure (`\+ Goal`) | 016-negation | Meta-call + `CUT` + `FAIL` pattern |
+| 8 | "Lion Lies on Tuesdays" puzzle | 017-liar-puzzle | End-to-end logic puzzle on refvm |
 
 Velocity so far: steps 001-007 landed across 2 calendar days
-(2026-04-16 → 2026-04-17). Later steps carry more VM-side complexity
-(refvm dispatch loop, list cells, arithmetic semantics), so assume
-lower per-step throughput for 008+.
+(2026-04-16 → 2026-04-17); steps 008-011 landed on day 2. Later
+steps carry more VM-side complexity (list cells, arithmetic
+semantics, cut), so assume lower per-step throughput.
+
+## Real-VM status
+
+The authoritative LAM VM (`sw-cor24-prolog/build/lam.bin`) does
+not currently support loading external LAM bytecode at runtime —
+`VM_INIT` zeroes the MEM array before every test run, so
+`cor24-run --patch` writes are erased, and test programs are
+hardcoded via `LOAD_*` procedures in
+`sw-cor24-prolog/src/vm/vm_tests.plsw` at build time. Step
+019-integration-ancestor is blocked on upstream support for a
+UART-based bytecode loader (or an equivalent build-time hook
+that substitutes a user-provided `LOAD_*` proc).
+
+In the meantime, step 011-cell-parity (validation) closes the
+loop on "our compiler emits correct bytecode" via a structural
+parity test: `tests/integration/ancestor_parity.rs` decodes our
+`ancestor.lam` output and asserts the shape (opcode set,
+env-frame balance, `CALL`/`EXECUTE`/`TRY`/`TRUST` counts, Y-slot
+ops, terminator). The two bytecodes — ours and the upstream's
+hand-written `LOAD_ANCESTOR_COMPILED` — produce the same answer
+but are not byte-identical; the upstream hand-optimizes
+`ALLOCATE 1` by keeping `Z` in X-regs across the `CALL` to
+`parent`, while our compiler conservatively uses `ALLOCATE 2`
+and puts `Z` in `Y1`. Both are correct per `vm-spec.md` §4.
+
+Treat refvm as the working VM for demos. Real-VM integration
+becomes possible once upstream ships the loader hook.
 
 ## SNOBOL4 / PL/SW port ETA
 

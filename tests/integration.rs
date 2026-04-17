@@ -10,3 +10,6 @@ mod asm;
 
 #[path = "integration/refvm_scenarios.rs"]
 mod refvm_scenarios;
+
+#[path = "integration/ancestor_parity.rs"]
+mod ancestor_parity;
