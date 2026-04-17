@@ -4,3 +4,6 @@
 
 #[path = "integration/ancestor.rs"]
 mod ancestor;
+
+#[path = "integration/asm.rs"]
+mod asm;

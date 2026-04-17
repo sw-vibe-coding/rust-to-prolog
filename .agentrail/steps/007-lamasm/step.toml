@@ -1,6 +1,6 @@
 number = 7
 slug = "lamasm"
-status = "pending"
+status = "in-progress"
 description = """
 Implement src/asm.rs and src/bin/lamasm.rs: a two-pass .lam assembler.
 
