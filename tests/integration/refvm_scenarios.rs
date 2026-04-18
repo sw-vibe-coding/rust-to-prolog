@@ -383,6 +383,47 @@ fn compiled_color_prints_all_colors_via_backtracking() {
 }
 
 #[test]
+fn compiled_max_with_cut_commits_to_first_clause() {
+    // max.pl: max(5, 3, M) fires the first clause (5 > 3, !, M=5).
+    // The cut removes the second clause's choice point, so the
+    // subsequent `fail` exhausts at the top level after printing
+    // exactly one answer.
+    let src = include_str!("../../examples/max.pl");
+    let (r, out) = run_with_compiled_atoms(src);
+    assert_eq!(r, RunResult::Fail);
+    assert_eq!(out, "5\n");
+}
+
+#[test]
+fn compiled_max_without_cut_would_print_two_answers() {
+    // Control: same clauses but without the cut — `fail` now
+    // backtracks into the second clause with M=3, giving "5\n3\n".
+    let src = "\
+max(X, Y, X) :- X > Y.
+max(_, Y, Y).
+?- max(5, 3, M), write(M), nl, fail.
+";
+    let (r, out) = run_with_compiled_atoms(src);
+    assert_eq!(r, RunResult::Fail);
+    assert_eq!(out, "5\n3\n");
+}
+
+#[test]
+fn compiled_cut_in_first_clause_kills_second_alternative() {
+    // pick(a) :- !. pick(b). The cut commits to 'a'; the
+    // subsequent `fail` has no choice point to return to, so
+    // only one line is printed.
+    let src = "\
+pick(a) :- !.
+pick(b).
+?- pick(X), write(X), nl, fail.
+";
+    let (r, out) = run_with_compiled_atoms(src);
+    assert_eq!(r, RunResult::Fail);
+    assert_eq!(out, "a\n");
+}
+
+#[test]
 fn compiled_sum_tail_recursion_prints_total() {
     // sum(3, 0, X): accumulator walks 0 -> 3 -> 5 -> 6 as N counts
     // down to 0. Exercises is/2 with + and -, >/2 on ints, and a

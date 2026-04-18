@@ -287,7 +287,7 @@ fn emit_clause_body(
 ) -> Result<(), CompileError> {
     push_i(out, Instr::Label(lbl_clause_body(pname, clause_idx)?))?;
     let classes = classify_clause(clause, atoms)?;
-    let mut rm = assign_regs(&classes, clause)?;
+    let mut rm = assign_regs(&classes, clause, atoms)?;
     if rm.has_env() {
         push_i(out, Instr::Allocate { n: rm.n_perm })?;
     }
@@ -336,7 +336,7 @@ fn classify_clause(
 fn is_inline_builtin(goal: &Term, atoms: &AtomTable) -> bool {
     match goal {
         Term::Atom(id) => match atoms.name(*id).map(|n| n.as_str()) {
-            Some("nl") | Some("fail") => true,
+            Some("nl") | Some("fail") | Some("!") => true,
             _ => false,
         },
         Term::Struct { functor, args } => match atoms.name(*functor).map(|n| n.as_str()) {
@@ -377,6 +377,7 @@ fn mark_vars(
 fn assign_regs(
     classes: &[Class; MAX_CLAUSE_VARS],
     clause: &Clause,
+    _atoms: &AtomTable,
 ) -> Result<RegMap, CompileError> {
     let mut rm = RegMap::empty();
     walk_assign(&clause.head, clause, classes, &mut rm)?;
@@ -640,6 +641,7 @@ fn emit_inline_builtin(
             match name {
                 "nl" => push_i(out, Instr::BNl),
                 "fail" => push_i(out, Instr::Fail),
+                "!" => push_i(out, Instr::Cut),
                 _ => Err(CompileError::BadGoal),
             }
         }
@@ -946,7 +948,7 @@ fn emit_query_clause(
         return Err(CompileError::QueryShape);
     }
     let classes = classify_clause(clause, atoms)?;
-    let mut rm = assign_regs(&classes, clause)?;
+    let mut rm = assign_regs(&classes, clause, atoms)?;
     if rm.has_env() {
         push_i(out, Instr::Allocate { n: rm.n_perm })?;
     }

@@ -28,6 +28,7 @@ pub const OP_FAIL: u8 = 5;
 pub const OP_TRY: u8 = 6;
 pub const OP_RETRY: u8 = 7;
 pub const OP_TRUST: u8 = 8;
+pub const OP_CUT: u8 = 9;
 pub const OP_PUT_VAR: u8 = 10;
 pub const OP_PUT_VAL: u8 = 11;
 pub const OP_PUT_CONST: u8 = 12;
@@ -67,6 +68,7 @@ pub fn step<W: std::io::Write>(vm: &mut Vm, out: &mut W) -> Result<Step, RunErro
         OP_TRY => exec_try(vm),
         OP_RETRY => exec_retry(vm),
         OP_TRUST => exec_trust(vm),
+        OP_CUT => exec_cut(vm),
         OP_PUT_VAR => exec_put_var(vm, op1, op2),
         OP_PUT_VAL => exec_put_val(vm, op1, op2),
         OP_PUT_CONST => exec_put_const(vm, op1),
@@ -390,6 +392,16 @@ fn exec_allocate(vm: &mut Vm, n: u8) -> Result<Step, RunError> {
         saved_cp: vm.cp,
         ys: vec![0u32; n as usize],
     });
+    vm.pc += 1;
+    Ok(Step::Continue)
+}
+
+fn exec_cut(vm: &mut Vm) -> Result<Step, RunError> {
+    // Upstream LAM VM (sw-cor24-prolog/src/vm/vm_ctrl.plsw) implements
+    // CUT as BP = CP_BASE — i.e., discards every choice point. Not
+    // scoped to the current predicate; sufficient for flat cut usage
+    // in the liar-puzzle-class demos but wrong for nested-call cut.
+    vm.choice.clear();
     vm.pc += 1;
     Ok(Step::Continue)
 }

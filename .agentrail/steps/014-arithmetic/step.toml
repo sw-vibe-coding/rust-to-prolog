@@ -1,6 +1,6 @@
 number = 14
 slug = "arithmetic"
-status = "in-progress"
+status = "completed"
 description = """
 Add arithmetic builtins: is/2, </2, >/2.
 
@@ -8,5 +8,6 @@ Recognize in compile.rs; emit B_IS_..."""
 role = "production"
 context_files = []
 created_at = "2026-04-16T13:09:06"
+completed_at = "2026-04-18T15:39:40"
 task_type = "rust-module"
-commits = []
+commits = ["3305a546ad7cb37e095b44be25def7aaf03299ca"]
