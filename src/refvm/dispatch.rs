@@ -230,7 +230,7 @@ fn exec_b_write<W: std::io::Write>(
     out: &mut W,
 ) -> Result<Step, RunError> {
     let ai = reg_index(ai)?;
-    write_term(vm.regs[ai], &vm.heap, out).map_err(|_| RunError::Io)?;
+    write_term(vm.regs[ai], &vm.heap, &vm.atoms, out).map_err(|_| RunError::Io)?;
     vm.pc += 1;
     Ok(Step::Continue)
 }

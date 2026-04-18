@@ -1,0 +1,11 @@
+{
+  "task_type": "integration-test",
+  "state": {
+    "number": 11,
+    "step": "cell-parity"
+  },
+  "action": "cargo test + scripts/run-tests.sh green gate; read upstream vm_tests.plsw LOAD_ANCESTOR_COMPILED (36 cells, ALLOCATE 1, atoms {bob=1,ann=2,liz=4}) to pin the comparison table; wrote a simple decoder that splits 1-vs-2-cell instructions by opcode and counts per-opcode occurrences; chose structural invariants over byte-match because the two bytecodes are known to diverge on layout + ALLOCATE-count while both produce the same answer; aborted 020-integration-ancestor earlier with reason 'real VM has no runtime bytecode injection — VM_INIT zeroes MEM, cor24-run --patch erased before VM_RUN'.",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-17T13:26:08"
+}

@@ -281,7 +281,7 @@ fn emit_clause_body(
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     push_i(out, Instr::Label(lbl_clause_body(pname, clause_idx)?))?;
-    let classes = classify_clause(clause)?;
+    let classes = classify_clause(clause, atoms)?;
     let mut rm = assign_regs(&classes, clause)?;
     if rm.has_env() {
         push_i(out, Instr::Allocate { n: rm.n_perm })?;
@@ -294,18 +294,27 @@ fn emit_clause_body(
     }
 }
 
-fn classify_clause(clause: &Clause) -> Result<[Class; MAX_CLAUSE_VARS], CompileError> {
+fn classify_clause(
+    clause: &Clause,
+    atoms: &AtomTable,
+) -> Result<[Class; MAX_CLAUSE_VARS], CompileError> {
     let n_goals = clause.body.len();
-    let n_chunks = if n_goals == 0 { 1 } else { n_goals };
+    let mut goal_chunk = [0usize; MAX_BODY];
+    let mut chunk_ix = 0usize;
+    for i in 0..n_goals {
+        goal_chunk[i] = chunk_ix;
+        let is_last = i + 1 == n_goals;
+        let g = *clause.body.get(i).expect("goal");
+        if !is_inline_builtin(&g, atoms) && !is_last {
+            chunk_ix += 1;
+        }
+    }
+    let n_chunks = chunk_ix + 1;
     let mut hits = [[false; MAX_BODY]; MAX_CLAUSE_VARS];
     mark_vars(&clause.head, clause, &mut hits, 0)?;
-    if n_goals > 0 {
-        let g0 = *clause.body.get(0).expect("body[0]");
-        mark_vars(&g0, clause, &mut hits, 0)?;
-    }
-    for k in 1..n_goals {
-        let g = *clause.body.get(k).expect("body goal");
-        mark_vars(&g, clause, &mut hits, k)?;
+    for i in 0..n_goals {
+        let g = *clause.body.get(i).expect("goal");
+        mark_vars(&g, clause, &mut hits, goal_chunk[i])?;
     }
     let mut classes = [Class::Unused; MAX_CLAUSE_VARS];
     for slot in 0..MAX_CLAUSE_VARS {
@@ -317,6 +326,20 @@ fn classify_clause(clause: &Clause) -> Result<[Class; MAX_CLAUSE_VARS], CompileE
         };
     }
     Ok(classes)
+}
+
+fn is_inline_builtin(goal: &Term, atoms: &AtomTable) -> bool {
+    match goal {
+        Term::Atom(id) => match atoms.name(*id).map(|n| n.as_str()) {
+            Some("nl") | Some("fail") => true,
+            _ => false,
+        },
+        Term::Struct { functor, args } => match atoms.name(*functor).map(|n| n.as_str()) {
+            Some("write") => args.len() == 1,
+            _ => false,
+        },
+        _ => false,
+    }
 }
 
 fn mark_vars(
@@ -498,6 +521,16 @@ fn emit_goal(
     is_last: bool,
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
+    if is_inline_builtin(goal, atoms) {
+        emit_inline_builtin(goal, clause, atoms, rm, out)?;
+        if is_last {
+            if rm.has_env() {
+                push_i(out, Instr::Deallocate)?;
+            }
+            return push_i(out, Instr::Proceed);
+        }
+        return Ok(());
+    }
     let fid = match goal {
         Term::Atom(id) => *id,
         Term::Struct { functor, args } => {
@@ -515,6 +548,38 @@ fn emit_goal(
         push_i(out, Instr::Execute { label: entry })
     } else {
         push_i(out, Instr::Call { label: entry })
+    }
+}
+
+fn emit_inline_builtin(
+    goal: &Term,
+    clause: &Clause,
+    atoms: &AtomTable,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    match goal {
+        Term::Atom(id) => {
+            let name = atoms.name(*id).ok_or(CompileError::UnknownAtom)?.as_str();
+            match name {
+                "nl" => push_i(out, Instr::BNl),
+                "fail" => push_i(out, Instr::Fail),
+                _ => Err(CompileError::BadGoal),
+            }
+        }
+        Term::Struct { functor, args } => {
+            let name = atoms.name(*functor).ok_or(CompileError::UnknownAtom)?.as_str();
+            match (name, args.len()) {
+                ("write", 1) => {
+                    let ti = *args.get(0).expect("one arg");
+                    let a = *clause.subterm(ti).ok_or(CompileError::BadSubterm)?;
+                    emit_put_arg(0, &a, rm, out)?;
+                    push_i(out, Instr::BWrite { ai: 0 })
+                }
+                _ => Err(CompileError::BadGoal),
+            }
+        }
+        _ => Err(CompileError::BadGoal),
     }
 }
 
@@ -607,23 +672,44 @@ fn emit_query_clause(
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     push_i(out, Instr::Label(lbl_query()?))?;
-    if clause.body.len() != 1 {
+    if clause.body.is_empty() {
         return Err(CompileError::QueryShape);
     }
-    let goal = *clause.body.get(0).expect("single-goal query");
-    let classes = classify_clause(clause)?;
+    let classes = classify_clause(clause, atoms)?;
     let mut rm = assign_regs(&classes, clause)?;
+    if rm.has_env() {
+        push_i(out, Instr::Allocate { n: rm.n_perm })?;
+    }
+    for gi in 0..clause.body.len() {
+        let goal = *clause.body.get(gi).expect("goal in range");
+        emit_query_goal(&goal, clause, atoms, &mut rm, out)?;
+    }
+    if rm.has_env() {
+        push_i(out, Instr::Deallocate)?;
+    }
+    push_i(out, Instr::Halt)
+}
+
+fn emit_query_goal(
+    goal: &Term,
+    clause: &Clause,
+    atoms: &AtomTable,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    if is_inline_builtin(goal, atoms) {
+        return emit_inline_builtin(goal, clause, atoms, rm, out);
+    }
     let fid = match goal {
-        Term::Atom(id) => id,
+        Term::Atom(id) => *id,
         Term::Struct { functor, args } => {
-            emit_put_args(&args, clause, &mut rm, out)?;
-            functor
+            emit_put_args(args, clause, rm, out)?;
+            *functor
         }
         _ => return Err(CompileError::BadGoal),
     };
     let pname = *atoms.name(fid).ok_or(CompileError::UnknownAtom)?;
-    push_i(out, Instr::Call { label: lbl_entry(&pname)? })?;
-    push_i(out, Instr::Halt)
+    push_i(out, Instr::Call { label: lbl_entry(&pname)? })
 }
 
 fn lbl_query() -> Result<LabelId, CompileError> {

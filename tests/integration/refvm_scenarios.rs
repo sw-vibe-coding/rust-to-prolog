@@ -5,7 +5,7 @@
 //! ancestor-family opcodes.
 
 use rust_to_prolog::asm::{assemble, Cells};
-use rust_to_prolog::refvm::{run_with, RunResult};
+use rust_to_prolog::refvm::{run_with, run_with_atoms, RunResult};
 
 fn cells_to_vec(c: &Cells) -> Vec<u32> {
     (0..c.len()).map(|i| *c.get(i).expect("in range")).collect()
@@ -324,6 +324,31 @@ fn compile_pipeline(src: &str) -> String {
     emit(&instrs, &atoms).expect("emit ok")
 }
 
+fn compile_pipeline_with_atoms(src: &str) -> (String, Vec<String>) {
+    use rust_to_prolog::compile::compile;
+    use rust_to_prolog::emit::emit;
+    use rust_to_prolog::parse::{parse, AtomId, AtomTable};
+    use rust_to_prolog::tokenize::tokenize;
+    let toks = tokenize(src).expect("tokenize ok");
+    let mut atoms = AtomTable::new();
+    let clauses = parse(&toks, &mut atoms).expect("parse ok");
+    let instrs = compile(&clauses, &atoms).expect("compile ok");
+    let lam = emit(&instrs, &atoms).expect("emit ok");
+    let names: Vec<String> = (0..atoms.len() as AtomId)
+        .map(|i| atoms.name(i).expect("id in range").as_str().to_string())
+        .collect();
+    (lam, names)
+}
+
+fn run_with_compiled_atoms(src: &str) -> (RunResult, String) {
+    let (lam, names) = compile_pipeline_with_atoms(src);
+    let cells = assemble(&lam).expect("assemble ok");
+    let code = cells_to_vec(&cells);
+    let mut buf = Vec::new();
+    let res = run_with_atoms(code, names, &mut buf);
+    (res, String::from_utf8(buf).expect("utf8"))
+}
+
 #[test]
 fn compiled_parent_runs_on_refvm() {
     let lam = compile_pipeline("parent(bob, ann). parent(ann, liz). ?- parent(bob, ann).");
@@ -343,6 +368,27 @@ fn compiled_ancestor_runs_on_refvm() {
     let lam = compile_pipeline(src);
     let (r, _) = run(&lam);
     assert_eq!(r, RunResult::Halt);
+}
+
+#[test]
+fn compiled_color_prints_all_colors_via_backtracking() {
+    // examples/color.pl: `color(X), write(X), nl, fail.` enumerates
+    // red/green/blue through TRY/RETRY/TRUST, printing each via the
+    // inline B_WRITE builtin. `fail` forces the next retry; when
+    // color's choice points exhaust, the whole query returns FAIL.
+    let src = include_str!("../../examples/color.pl");
+    let (r, out) = run_with_compiled_atoms(src);
+    assert_eq!(r, RunResult::Fail);
+    assert_eq!(out, "red\ngreen\nblue\n");
+}
+
+#[test]
+fn compiled_write_hello_terminates_via_halt() {
+    // `?- write(hello), nl.` — all inline builtins, no user-pred
+    // CALL, so no ALLOCATE. Falls through to HALT after nl.
+    let (r, out) = run_with_compiled_atoms("?- write(hello), nl.");
+    assert_eq!(r, RunResult::Halt);
+    assert_eq!(out, "hello\n");
 }
 
 #[test]

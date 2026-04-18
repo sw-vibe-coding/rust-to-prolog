@@ -10,10 +10,15 @@ use std::io::{self, Write};
 const INT_SIGN_BIT: u32 = 1 << 20;
 const INT_SIGN_EXTEND: u32 = 0xFFE0_0000;
 
-pub fn write_term<W: Write>(cell: u32, heap: &[u32], out: &mut W) -> io::Result<()> {
+pub fn write_term<W: Write>(
+    cell: u32,
+    heap: &[u32],
+    atoms: &[String],
+    out: &mut W,
+) -> io::Result<()> {
     let c = deref(cell, heap);
     match tag(c) {
-        TAG_ATOM => write_atom(payload(c), out),
+        TAG_ATOM => write_atom(payload(c), atoms, out),
         TAG_INT => write_int(payload(c), out),
         TAG_REF => write!(out, "_G{}", payload(c)),
         _ => write!(out, "<unsupported:{:06X}>", c & 0x00FF_FFFF),
@@ -24,8 +29,13 @@ pub fn write_nl<W: Write>(out: &mut W) -> io::Result<()> {
     writeln!(out)
 }
 
-fn write_atom<W: Write>(id: u32, out: &mut W) -> io::Result<()> {
-    write!(out, "atom({})", id)
+fn write_atom<W: Write>(id: u32, atoms: &[String], out: &mut W) -> io::Result<()> {
+    let ix = id as usize;
+    if ix < atoms.len() {
+        write!(out, "{}", atoms[ix])
+    } else {
+        write!(out, "atom({})", id)
+    }
 }
 
 fn write_int<W: Write>(p: u32, out: &mut W) -> io::Result<()> {
@@ -43,16 +53,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn writes_atom_as_atom_id_for_now() {
+    fn writes_atom_id_when_table_empty() {
         let mut buf = Vec::new();
-        write_term(make(TAG_ATOM, 5), &[], &mut buf).expect("write ok");
+        write_term(make(TAG_ATOM, 5), &[], &[], &mut buf).expect("write ok");
+        assert_eq!(buf, b"atom(5)");
+    }
+
+    #[test]
+    fn writes_atom_name_from_table() {
+        let atoms = vec!["parent".to_string(), "bob".to_string(), "ann".to_string()];
+        let mut buf = Vec::new();
+        write_term(make(TAG_ATOM, 1), &[], &atoms, &mut buf).expect("write ok");
+        assert_eq!(buf, b"bob");
+    }
+
+    #[test]
+    fn falls_back_to_atom_id_when_out_of_range() {
+        let atoms = vec!["parent".to_string()];
+        let mut buf = Vec::new();
+        write_term(make(TAG_ATOM, 5), &[], &atoms, &mut buf).expect("write ok");
         assert_eq!(buf, b"atom(5)");
     }
 
     #[test]
     fn writes_positive_int() {
         let mut buf = Vec::new();
-        write_term(make(TAG_INT, 42), &[], &mut buf).expect("write ok");
+        write_term(make(TAG_INT, 42), &[], &[], &mut buf).expect("write ok");
         assert_eq!(buf, b"42");
     }
 
@@ -60,7 +86,7 @@ mod tests {
     fn writes_negative_int_with_sign_extension() {
         let mut buf = Vec::new();
         // -1 in 21-bit two's complement = 0x1FFFFF
-        write_term(make(TAG_INT, 0x1F_FFFF), &[], &mut buf).expect("write ok");
+        write_term(make(TAG_INT, 0x1F_FFFF), &[], &[], &mut buf).expect("write ok");
         assert_eq!(buf, b"-1");
     }
 
@@ -76,7 +102,7 @@ mod tests {
         let mut heap: Vec<u32> = Vec::new();
         let r = alloc_unbound(&mut heap);
         let mut buf = Vec::new();
-        write_term(r, &heap, &mut buf).expect("write ok");
+        write_term(r, &heap, &[], &mut buf).expect("write ok");
         assert_eq!(buf, b"_G0");
     }
 }

@@ -1,6 +1,6 @@
 number = 12
 slug = "builtins-io"
-status = "pending"
+status = "in-progress"
 description = """
 Add write/1, nl/0, fail/0 builtins to compile.rs and refvm/builtin.rs.
 

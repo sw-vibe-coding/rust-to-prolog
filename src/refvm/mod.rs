@@ -83,6 +83,7 @@ pub struct Vm {
     pub cp: usize,
     pub choice: Vec<choice::ChoicePt>,
     pub env: Vec<EnvFrame>,
+    pub atoms: Vec<String>,
     pub tick_limit: u64,
 }
 
@@ -97,6 +98,7 @@ impl Vm {
             cp: 0,
             choice: Vec::new(),
             env: Vec::new(),
+            atoms: Vec::new(),
             tick_limit: DEFAULT_TICK_LIMIT,
         }
     }
@@ -109,6 +111,16 @@ pub fn run(code: Vec<u32>) -> RunResult {
 
 pub fn run_with<W: std::io::Write>(code: Vec<u32>, out: &mut W) -> RunResult {
     let mut vm = Vm::new(code);
+    run_vm(&mut vm, out)
+}
+
+pub fn run_with_atoms<W: std::io::Write>(
+    code: Vec<u32>,
+    atoms: Vec<String>,
+    out: &mut W,
+) -> RunResult {
+    let mut vm = Vm::new(code);
+    vm.atoms = atoms;
     run_vm(&mut vm, out)
 }
 
