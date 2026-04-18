@@ -13,8 +13,11 @@
 
 use super::builtin::{write_nl, write_term};
 use super::choice::{pop, push_choice, restore_top, top_alt, update_alt};
-use super::heap::{alloc_unbound, make_ref, unify};
-use super::{EnvFrame, RunError, Step, Vm};
+use super::heap::{
+    alloc_unbound, fun_arity, fun_atom_id, make_fun, make_ref, make_str, payload, tag, unify,
+    TAG_FUN, TAG_REF, TAG_STR,
+};
+use super::{EnvFrame, RunError, Step, UnifyMode, Vm};
 
 pub const OP_NOP: u8 = 0;
 pub const OP_HALT: u8 = 1;
@@ -31,7 +34,11 @@ pub const OP_PUT_CONST: u8 = 12;
 pub const OP_PUT_Y_VAL: u8 = 13;
 pub const OP_GET_VAR: u8 = 16;
 pub const OP_GET_CONST: u8 = 18;
+pub const OP_GET_STRUCT: u8 = 19;
 pub const OP_GET_Y_VAR: u8 = 20;
+pub const OP_UNIFY_VAR: u8 = 22;
+pub const OP_UNIFY_VAL: u8 = 23;
+pub const OP_UNIFY_CONST: u8 = 24;
 pub const OP_ALLOCATE: u8 = 28;
 pub const OP_DEALLOCATE: u8 = 29;
 pub const OP_B_WRITE: u8 = 32;
@@ -61,7 +68,11 @@ pub fn step<W: std::io::Write>(vm: &mut Vm, out: &mut W) -> Result<Step, RunErro
         OP_PUT_Y_VAL => exec_put_y_val(vm, op1, op2),
         OP_GET_VAR => exec_get_var(vm, op1, op2),
         OP_GET_CONST => exec_get_const(vm, op1),
+        OP_GET_STRUCT => exec_get_struct(vm, op1, op2),
         OP_GET_Y_VAR => exec_get_y_var(vm, op1, op2),
+        OP_UNIFY_VAR => exec_unify_var(vm, op1),
+        OP_UNIFY_VAL => exec_unify_val(vm, op1),
+        OP_UNIFY_CONST => exec_unify_const(vm),
         OP_ALLOCATE => exec_allocate(vm, op1),
         OP_DEALLOCATE => exec_deallocate(vm),
         OP_B_WRITE => exec_b_write(vm, op1, out),
@@ -181,6 +192,122 @@ fn exec_get_const(vm: &mut Vm, ai: u8) -> Result<Step, RunError> {
         return exec_fail(vm);
     }
     vm.pc += 2;
+    Ok(Step::Continue)
+}
+
+fn exec_get_struct(vm: &mut Vm, ai: u8, arity: u8) -> Result<Step, RunError> {
+    let imm = read_imm(vm)? as u32;
+    let atom_id = payload(imm);
+    let ai_ix = reg_index(ai)?;
+    let target = super::heap::deref(vm.regs[ai_ix], &vm.heap);
+    match tag(target) {
+        TAG_STR => enter_read_mode(vm, target, atom_id, arity),
+        TAG_REF => enter_write_mode(vm, ai_ix, target, atom_id, arity),
+        _ => exec_fail(vm),
+    }
+}
+
+fn enter_read_mode(vm: &mut Vm, target: u32, atom_id: u32, arity: u8) -> Result<Step, RunError> {
+    let addr = payload(target) as usize;
+    if addr >= vm.heap.len() {
+        return exec_fail(vm);
+    }
+    let fun = vm.heap[addr];
+    if tag(fun) != TAG_FUN || fun_atom_id(fun) != atom_id || fun_arity(fun) != arity {
+        return exec_fail(vm);
+    }
+    vm.mode = UnifyMode::Read;
+    vm.up = addr + 1;
+    vm.pc += 2;
+    Ok(Step::Continue)
+}
+
+fn enter_write_mode(
+    vm: &mut Vm,
+    ai_ix: usize,
+    target: u32,
+    atom_id: u32,
+    arity: u8,
+) -> Result<Step, RunError> {
+    let fun_addr = vm.heap.len();
+    vm.heap.push(make_fun(atom_id, arity));
+    let str_cell = make_str(fun_addr);
+    if tag(target) == TAG_REF {
+        let heap_slot = payload(target) as usize;
+        super::heap::bind(heap_slot, str_cell, &mut vm.heap, &mut vm.trail);
+    }
+    vm.regs[ai_ix] = str_cell;
+    vm.mode = UnifyMode::Write;
+    vm.up = fun_addr + 1;
+    vm.pc += 2;
+    Ok(Step::Continue)
+}
+
+fn exec_unify_var(vm: &mut Vm, xi: u8) -> Result<Step, RunError> {
+    let xi_ix = reg_index(xi)?;
+    match vm.mode {
+        UnifyMode::Read => {
+            if vm.up >= vm.heap.len() {
+                return exec_fail(vm);
+            }
+            vm.regs[xi_ix] = vm.heap[vm.up];
+            vm.up += 1;
+        }
+        UnifyMode::Write => {
+            let slot = vm.heap.len();
+            vm.heap.push(make_ref(slot));
+            vm.regs[xi_ix] = make_ref(slot);
+            vm.up = slot + 1;
+        }
+    }
+    vm.pc += 1;
+    Ok(Step::Continue)
+}
+
+fn exec_unify_val(vm: &mut Vm, xi: u8) -> Result<Step, RunError> {
+    let xi_ix = reg_index(xi)?;
+    match vm.mode {
+        UnifyMode::Read => {
+            if vm.up >= vm.heap.len() {
+                return exec_fail(vm);
+            }
+            let cell = vm.heap[vm.up];
+            let ok = unify(vm.regs[xi_ix], cell, &mut vm.heap, &mut vm.trail);
+            if !ok {
+                return exec_fail(vm);
+            }
+            vm.up += 1;
+        }
+        UnifyMode::Write => {
+            vm.heap.push(vm.regs[xi_ix]);
+            vm.up = vm.heap.len();
+        }
+    }
+    vm.pc += 1;
+    Ok(Step::Continue)
+}
+
+fn exec_unify_const(vm: &mut Vm) -> Result<Step, RunError> {
+    let imm = read_imm(vm)? as u32;
+    match vm.mode {
+        UnifyMode::Read => {
+            if vm.up >= vm.heap.len() {
+                return exec_fail(vm);
+            }
+            let cell = vm.heap[vm.up];
+            let ok = unify(cell, imm, &mut vm.heap, &mut vm.trail);
+            if !ok {
+                return exec_fail(vm);
+            }
+            vm.up += 1;
+            vm.pc += 2;
+        }
+        UnifyMode::Write => {
+            vm.heap.push(imm);
+            vm.up = vm.heap.len();
+            vm.pc += 2;
+        }
+    }
     Ok(Step::Continue)
 }
 

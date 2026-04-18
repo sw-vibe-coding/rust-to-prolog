@@ -177,7 +177,7 @@ fn parse_atom_dir<'a>(rest: &'a str, line: u32) -> Result<LineKind<'a>, AsmError
         return Err(AsmError::BadDirective { line });
     }
     let id: u32 = id_s.parse().map_err(|_| AsmError::BadDirective { line })?;
-    if !is_ident(name) {
+    if name.is_empty() {
         return Err(AsmError::BadDirective { line });
     }
     Ok(LineKind::AtomDir { id, name })
@@ -276,6 +276,7 @@ fn opcode_of(mnem: &str) -> Option<u8> {
         "GET_Y_VAR" => Some(20),
         "UNIFY_VAR" => Some(22),
         "UNIFY_VAL" => Some(23),
+        "UNIFY_CONST" => Some(24),
         "ALLOCATE" => Some(28),
         "DEALLOCATE" => Some(29),
         "B_WRITE" => Some(32),
@@ -298,6 +299,7 @@ fn is_two_cell(mnem: &str) -> bool {
             | "PUT_CONST"
             | "GET_CONST"
             | "GET_STRUCT"
+            | "UNIFY_CONST"
     )
 }
 
@@ -311,6 +313,7 @@ enum Shape {
     YiAi,
     Alloc,
     Reg1,
+    ConstOnly,
 }
 
 fn shape_of(mnem: &str) -> Shape {
@@ -324,6 +327,7 @@ fn shape_of(mnem: &str) -> Shape {
         "PUT_Y_VAL" | "GET_Y_VAR" => Shape::YiAi,
         "ALLOCATE" => Shape::Alloc,
         "B_WRITE" | "UNIFY_VAR" | "UNIFY_VAL" => Shape::Reg1,
+        "UNIFY_CONST" => Shape::ConstOnly,
         _ => Shape::NoOp,
     }
 }
@@ -370,7 +374,23 @@ fn emit(
         Shape::YiAi => emit_two_reg(opc, &args, line, true, cells),
         Shape::Alloc => emit_alloc(opc, &args, line, cells),
         Shape::Reg1 => emit_reg1(opc, &args, line, cells),
+        Shape::ConstOnly => emit_const_only(opc, &args, line, atoms, cells),
     }
+}
+
+fn emit_const_only(
+    opc: u32,
+    args: &Args<'_>,
+    line: u32,
+    atoms: &AtomTab,
+    cells: &mut Cells,
+) -> Result<(), AsmError> {
+    if args.count != 1 {
+        return Err(AsmError::BadArity { line });
+    }
+    let imm = parse_const(args.slots[0].expect("count checked"), atoms, line)?;
+    push_cell(cells, opc << 16)?;
+    push_cell(cells, imm)
 }
 
 fn emit_noop(opc: u32, args: &Args<'_>, line: u32, cells: &mut Cells) -> Result<(), AsmError> {

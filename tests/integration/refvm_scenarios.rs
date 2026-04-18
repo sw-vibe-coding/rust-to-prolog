@@ -383,6 +383,14 @@ fn compiled_color_prints_all_colors_via_backtracking() {
 }
 
 #[test]
+fn compiled_member_prints_each_element_via_backtracking() {
+    let src = include_str!("../../examples/member.pl");
+    let (r, out) = run_with_compiled_atoms(src);
+    assert_eq!(r, RunResult::Fail);
+    assert_eq!(out, "a\nb\nc\n");
+}
+
+#[test]
 fn compiled_write_hello_terminates_via_halt() {
     // `?- write(hello), nl.` — all inline builtins, no user-pred
     // CALL, so no ALLOCATE. Falls through to HALT after nl.

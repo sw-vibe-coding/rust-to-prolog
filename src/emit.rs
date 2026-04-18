@@ -84,6 +84,7 @@ fn emit_instr(instr: &Instr, atoms: &AtomTable, out: &mut String) -> Result<(), 
         Instr::GetStruct { ai, atom, arity } => emit_get_struct(*ai, *atom, *arity, atoms, out),
         Instr::UnifyVar { xi } => wf(out, format_args!("    UNIFY_VAR X{xi}")),
         Instr::UnifyVal { xi } => wf(out, format_args!("    UNIFY_VAL X{xi}")),
+        Instr::UnifyConst { atom } => emit_unify_const(*atom, atoms, out),
         Instr::Allocate { n } => wf(out, format_args!("    ALLOCATE {n}")),
         Instr::Deallocate => ps(out, "    DEALLOCATE"),
         Instr::Call { label } => wf(out, format_args!("    CALL {}", label.as_str())),
@@ -108,6 +109,11 @@ fn emit_instr(instr: &Instr, atoms: &AtomTable, out: &mut String) -> Result<(), 
 fn emit_put_const(ai: u8, atom: AtomId, atoms: &AtomTable, out: &mut String) -> Result<(), EmitError> {
     let n = atom_name(atoms, atom)?;
     wf(out, format_args!("    PUT_CONST A{ai}, atom({n})"))
+}
+
+fn emit_unify_const(atom: AtomId, atoms: &AtomTable, out: &mut String) -> Result<(), EmitError> {
+    let n = atom_name(atoms, atom)?;
+    wf(out, format_args!("    UNIFY_CONST atom({n})"))
 }
 
 fn emit_get_const(ai: u8, atom: AtomId, atoms: &AtomTable, out: &mut String) -> Result<(), EmitError> {

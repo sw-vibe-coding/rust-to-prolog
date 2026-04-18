@@ -31,6 +31,22 @@ pub fn make_ref(addr: usize) -> u32 {
     make(TAG_REF, addr as u32)
 }
 
+pub fn make_str(addr: usize) -> u32 {
+    make(TAG_STR, addr as u32)
+}
+
+pub fn make_fun(atom_id: u32, arity: u8) -> u32 {
+    make(TAG_FUN, (atom_id << 5) | (arity as u32 & 0x1F))
+}
+
+pub fn fun_atom_id(fun_cell: u32) -> u32 {
+    (payload(fun_cell) >> 5) & 0xFFFF
+}
+
+pub fn fun_arity(fun_cell: u32) -> u8 {
+    (payload(fun_cell) & 0x1F) as u8
+}
+
 pub fn is_unbound(cell: u32, heap: &[u32]) -> bool {
     if tag(cell) != TAG_REF {
         return false;
@@ -97,7 +113,38 @@ pub fn unify(a: u32, b: u32, heap: &mut Vec<u32>, trail: &mut Vec<u32>) -> bool 
     if ta == TAG_INT && tb == TAG_INT {
         return payload(da) == payload(db);
     }
+    if ta == TAG_STR && tb == TAG_STR {
+        return unify_struct(payload(da) as usize, payload(db) as usize, heap, trail);
+    }
     false
+}
+
+fn unify_struct(
+    a_addr: usize,
+    b_addr: usize,
+    heap: &mut Vec<u32>,
+    trail: &mut Vec<u32>,
+) -> bool {
+    if a_addr >= heap.len() || b_addr >= heap.len() {
+        return false;
+    }
+    let fa = heap[a_addr];
+    let fb = heap[b_addr];
+    if tag(fa) != TAG_FUN || tag(fb) != TAG_FUN {
+        return false;
+    }
+    if payload(fa) != payload(fb) {
+        return false;
+    }
+    let arity = fun_arity(fa) as usize;
+    for i in 0..arity {
+        let ea = *heap.get(a_addr + 1 + i).unwrap_or(&0);
+        let eb = *heap.get(b_addr + 1 + i).unwrap_or(&0);
+        if !unify(ea, eb, heap, trail) {
+            return false;
+        }
+    }
+    true
 }
 
 #[cfg(test)]

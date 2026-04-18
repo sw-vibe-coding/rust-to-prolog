@@ -72,6 +72,16 @@ impl AtomTable {
         self.names.get(id as usize)
     }
 
+    pub fn find(&self, s: &str) -> Option<AtomId> {
+        for i in 0..self.names.len() {
+            let n = self.names.get(i).expect("in range");
+            if n.as_str() == s {
+                return Some(i as AtomId);
+            }
+        }
+        None
+    }
+
     pub fn len(&self) -> usize {
         self.names.len()
     }
@@ -358,6 +368,7 @@ fn parse_list(
     subs: &mut BoundedArr<Term, MAX_SUBTERMS>,
     vars: &mut VarTable,
 ) -> Result<Term, ParseError> {
+    let _ = atoms.intern("[]")?;
     if matches!(p.peek(), Some(Token::RBracket)) {
         p.bump();
         return Ok(Term::Nil);

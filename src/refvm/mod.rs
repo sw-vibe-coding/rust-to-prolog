@@ -74,6 +74,12 @@ pub struct EnvFrame {
     pub ys: Vec<u32>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UnifyMode {
+    Read,
+    Write,
+}
+
 pub struct Vm {
     pub code: Vec<u32>,
     pub heap: Vec<u32>,
@@ -84,6 +90,8 @@ pub struct Vm {
     pub choice: Vec<choice::ChoicePt>,
     pub env: Vec<EnvFrame>,
     pub atoms: Vec<String>,
+    pub mode: UnifyMode,
+    pub up: usize,
     pub tick_limit: u64,
 }
 
@@ -99,6 +107,8 @@ impl Vm {
             choice: Vec::new(),
             env: Vec::new(),
             atoms: Vec::new(),
+            mode: UnifyMode::Read,
+            up: 0,
             tick_limit: DEFAULT_TICK_LIMIT,
         }
     }

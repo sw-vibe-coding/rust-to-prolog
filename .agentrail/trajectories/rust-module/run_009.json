@@ -1,0 +1,11 @@
+{
+  "task_type": "rust-module",
+  "state": {
+    "number": 12,
+    "step": "builtins-io"
+  },
+  "action": "cargo test green gate; hand-traced color.pl to verify chunk classification (color(X) is a user pred that creates a chunk boundary; write/nl/fail are inline, all in chunk 1; X is perm → ALLOCATE 1); emit_inline_builtin factored out so emit_goal and emit_query_goal share the same write/nl/fail handling; emit_query_clause generalized from single-goal-only to N-goal with optional ALLOCATE+DEALLOCATE around body; added run_with_atoms wrapper rather than forcing all callers to populate Vm.atoms; chose fallback to 'atom(N)' on out-of-range index for debuggability; verified the empty-atoms case still works via existing b_write_and_b_nl_capture_output scenario (which prints 'atom(0)\\n').",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-17T17:38:01"
+}

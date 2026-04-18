@@ -55,6 +55,7 @@ pub enum Instr {
     GetStruct { ai: u8, atom: AtomId, arity: u8 },
     UnifyVar { xi: u8 },
     UnifyVal { xi: u8 },
+    UnifyConst { atom: AtomId },
     Allocate { n: u8 },
     Deallocate,
     Call { label: LabelId },
@@ -286,7 +287,7 @@ fn emit_clause_body(
     if rm.has_env() {
         push_i(out, Instr::Allocate { n: rm.n_perm })?;
     }
-    emit_head(&clause.head, clause, &mut rm, out)?;
+    emit_head(&clause.head, clause, atoms, &mut rm, out)?;
     match clause.kind {
         ClauseKind::Fact => push_i(out, Instr::Proceed),
         ClauseKind::Rule => emit_body(clause, atoms, &mut rm, out),
@@ -434,12 +435,13 @@ fn assign_slot(
 fn emit_head(
     head: &Term,
     clause: &Clause,
+    atoms: &AtomTable,
     rm: &mut RegMap,
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     match head {
         Term::Atom(_) => Ok(()),
-        Term::Struct { args, .. } => emit_head_args(args, clause, rm, out),
+        Term::Struct { args, .. } => emit_head_args(args, clause, atoms, rm, out),
         _ => Err(CompileError::BadHead),
     }
 }
@@ -447,13 +449,14 @@ fn emit_head(
 fn emit_head_args(
     args: &BoundedArr<TermIdx, MAX_ARGS>,
     clause: &Clause,
+    atoms: &AtomTable,
     rm: &mut RegMap,
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     for i in 0..args.len() {
         let ti = *args.get(i).expect("arg in range");
         let t = *clause.subterm(ti).ok_or(CompileError::BadSubterm)?;
-        emit_head_arg(i as u8, &t, rm, out)?;
+        emit_head_arg(i as u8, &t, clause, atoms, rm, out)?;
     }
     Ok(())
 }
@@ -461,15 +464,82 @@ fn emit_head_args(
 fn emit_head_arg(
     ai: u8,
     arg: &Term,
+    clause: &Clause,
+    atoms: &AtomTable,
     rm: &mut RegMap,
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     match arg {
         Term::Atom(id) => push_i(out, Instr::GetConst { ai, atom: *id }),
+        Term::Nil => {
+            let nil = atoms.find("[]").ok_or(CompileError::UnknownAtom)?;
+            push_i(out, Instr::GetConst { ai, atom: nil })
+        }
         Term::Var(slot) => emit_head_var(ai, *slot, rm, out),
         Term::Int(_) => Err(CompileError::IntArg),
+        Term::Struct { functor, args } => {
+            emit_head_struct(ai, *functor, args, clause, atoms, rm, out)
+        }
+    }
+}
+
+fn emit_head_struct(
+    ai: u8,
+    functor: AtomId,
+    args: &BoundedArr<TermIdx, MAX_ARGS>,
+    clause: &Clause,
+    atoms: &AtomTable,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    push_i(
+        out,
+        Instr::GetStruct { ai, atom: functor, arity: args.len() as u8 },
+    )?;
+    for i in 0..args.len() {
+        let ti = *args.get(i).expect("arg in range");
+        let sub = *clause.subterm(ti).ok_or(CompileError::BadSubterm)?;
+        emit_unify_term(&sub, clause, atoms, rm, out)?;
+    }
+    Ok(())
+}
+
+fn emit_unify_term(
+    term: &Term,
+    _clause: &Clause,
+    atoms: &AtomTable,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    match term {
+        Term::Atom(_) => Err(CompileError::StructArg),
+        Term::Nil => {
+            // Tail of cons that ends the list — handled by caller for
+            // lists. Standalone nil in a unify stream position needs
+            // UNIFY_CONST but we don't emit Instr::UnifyConst yet.
+            let _ = atoms;
+            Err(CompileError::StructArg)
+        }
+        Term::Var(slot) => emit_unify_var(*slot, rm, out),
+        Term::Int(_) => Err(CompileError::IntArg),
         Term::Struct { .. } => Err(CompileError::StructArg),
-        Term::Nil => Err(CompileError::StructArg),
+    }
+}
+
+fn emit_unify_var(
+    slot: VarSlot,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    match rm.get(slot) {
+        VarRole::Unused => Err(CompileError::TooManyVars),
+        VarRole::Temp { xi, seen: false } => {
+            push_i(out, Instr::UnifyVar { xi })?;
+            rm.mark_seen(slot);
+            Ok(())
+        }
+        VarRole::Temp { xi, seen: true } => push_i(out, Instr::UnifyVal { xi }),
+        VarRole::Perm { .. } => Err(CompileError::StructArg),
     }
 }
 
@@ -534,7 +604,7 @@ fn emit_goal(
     let fid = match goal {
         Term::Atom(id) => *id,
         Term::Struct { functor, args } => {
-            emit_put_args(args, clause, rm, out)?;
+            emit_put_args(args, clause, atoms, rm, out)?;
             *functor
         }
         _ => return Err(CompileError::BadGoal),
@@ -573,7 +643,7 @@ fn emit_inline_builtin(
                 ("write", 1) => {
                     let ti = *args.get(0).expect("one arg");
                     let a = *clause.subterm(ti).ok_or(CompileError::BadSubterm)?;
-                    emit_put_arg(0, &a, rm, out)?;
+                    emit_put_arg(0, &a, clause, atoms, rm, out)?;
                     push_i(out, Instr::BWrite { ai: 0 })
                 }
                 _ => Err(CompileError::BadGoal),
@@ -586,13 +656,14 @@ fn emit_inline_builtin(
 fn emit_put_args(
     args: &BoundedArr<TermIdx, MAX_ARGS>,
     clause: &Clause,
+    atoms: &AtomTable,
     rm: &mut RegMap,
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     for i in 0..args.len() {
         let ti = *args.get(i).expect("arg in range");
         let t = *clause.subterm(ti).ok_or(CompileError::BadSubterm)?;
-        emit_put_arg(i as u8, &t, rm, out)?;
+        emit_put_arg(i as u8, &t, clause, atoms, rm, out)?;
     }
     Ok(())
 }
@@ -600,15 +671,99 @@ fn emit_put_args(
 fn emit_put_arg(
     ai: u8,
     arg: &Term,
+    clause: &Clause,
+    atoms: &AtomTable,
     rm: &mut RegMap,
     out: &mut BoundedArr<Instr, MAX_INSTR>,
 ) -> Result<(), CompileError> {
     match arg {
         Term::Atom(id) => push_i(out, Instr::PutConst { ai, atom: *id }),
+        Term::Nil => {
+            let nil = atoms.find("[]").ok_or(CompileError::UnknownAtom)?;
+            push_i(out, Instr::PutConst { ai, atom: nil })
+        }
         Term::Var(slot) => emit_put_var(ai, *slot, rm, out),
         Term::Int(_) => Err(CompileError::IntArg),
+        Term::Struct { functor, args } => {
+            emit_build_list(ai, *functor, args, clause, atoms, rm, out)
+        }
+    }
+}
+
+fn emit_build_list(
+    ai: u8,
+    functor: AtomId,
+    args: &BoundedArr<TermIdx, MAX_ARGS>,
+    clause: &Clause,
+    atoms: &AtomTable,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    let dot_id = atoms.find(".").ok_or(CompileError::UnknownAtom)?;
+    let nil_id = atoms.find("[]").ok_or(CompileError::UnknownAtom)?;
+    if functor != dot_id || args.len() != 2 {
+        return Err(CompileError::StructArg);
+    }
+    let head_x = rm.scratch_x();
+    let cursor_x = head_x + 1;
+    if cursor_x >= REG_CAP {
+        return Err(CompileError::TooManyXRegs);
+    }
+    push_i(out, Instr::PutVar { ai, xi: head_x })?;
+    emit_list_spine(ai, args, clause, atoms, rm, cursor_x, dot_id, nil_id, out)?;
+    push_i(out, Instr::PutVal { ai, xi: head_x })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn emit_list_spine(
+    ai: u8,
+    first_args: &BoundedArr<TermIdx, MAX_ARGS>,
+    clause: &Clause,
+    atoms: &AtomTable,
+    rm: &mut RegMap,
+    cursor_x: u8,
+    dot_id: AtomId,
+    nil_id: AtomId,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    let mut cur_head_ti = *first_args.get(0).expect("cons head");
+    let mut cur_tail_ti = *first_args.get(1).expect("cons tail");
+    loop {
+        push_i(out, Instr::GetStruct { ai, atom: dot_id, arity: 2 })?;
+        let head = *clause.subterm(cur_head_ti).ok_or(CompileError::BadSubterm)?;
+        let tail = *clause.subterm(cur_tail_ti).ok_or(CompileError::BadSubterm)?;
+        emit_list_element(&head, atoms, rm, out)?;
+        match tail {
+            Term::Nil => {
+                push_i(out, Instr::UnifyConst { atom: nil_id })?;
+                return Ok(());
+            }
+            Term::Struct { functor, args: next } if functor == dot_id && next.len() == 2 => {
+                push_i(out, Instr::UnifyVar { xi: cursor_x })?;
+                push_i(out, Instr::PutVal { ai, xi: cursor_x })?;
+                cur_head_ti = *next.get(0).expect("cons head");
+                cur_tail_ti = *next.get(1).expect("cons tail");
+            }
+            _ => return Err(CompileError::StructArg),
+        }
+    }
+}
+
+fn emit_list_element(
+    elem: &Term,
+    atoms: &AtomTable,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    match elem {
+        Term::Atom(id) => push_i(out, Instr::UnifyConst { atom: *id }),
+        Term::Nil => {
+            let nil = atoms.find("[]").ok_or(CompileError::UnknownAtom)?;
+            push_i(out, Instr::UnifyConst { atom: nil })
+        }
+        Term::Var(slot) => emit_unify_var(*slot, rm, out),
+        Term::Int(_) => Err(CompileError::IntArg),
         Term::Struct { .. } => Err(CompileError::StructArg),
-        Term::Nil => Err(CompileError::StructArg),
     }
 }
 
@@ -703,7 +858,7 @@ fn emit_query_goal(
     let fid = match goal {
         Term::Atom(id) => *id,
         Term::Struct { functor, args } => {
-            emit_put_args(args, clause, rm, out)?;
+            emit_put_args(args, clause, atoms, rm, out)?;
             *functor
         }
         _ => return Err(CompileError::BadGoal),

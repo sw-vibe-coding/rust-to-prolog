@@ -1,6 +1,6 @@
 number = 12
 slug = "builtins-io"
-status = "in-progress"
+status = "completed"
 description = """
 Add write/1, nl/0, fail/0 builtins to compile.rs and refvm/builtin.rs.
 
@@ -8,5 +8,6 @@ Recog..."""
 role = "production"
 context_files = []
 created_at = "2026-04-16T13:09:06"
+completed_at = "2026-04-17T17:38:01"
 task_type = "rust-module"
-commits = []
+commits = ["592dfa55f6d6ecaec3649ac9c3724d27d055abb0"]
