@@ -267,7 +267,7 @@ fn parse_clause(p: &mut Parser, atoms: &mut AtomTable) -> Result<Clause, ParseEr
 
 fn parse_body(p: &mut Parser, atoms: &mut AtomTable, clause: &mut Clause) -> Result<(), ParseError> {
     loop {
-        let goal = parse_goal(p, atoms, &mut clause.subterms, &mut clause.vars)?;
+        let goal = parse_goal_expr(p, atoms, &mut clause.subterms, &mut clause.vars)?;
         clause.body.push(goal).map_err(|_| ParseError::TooManyGoals)?;
         if matches!(p.peek(), Some(Token::Comma)) {
             p.bump();
@@ -276,6 +276,85 @@ fn parse_body(p: &mut Parser, atoms: &mut AtomTable, clause: &mut Clause) -> Res
         break;
     }
     Ok(())
+}
+
+fn parse_goal_expr(
+    p: &mut Parser,
+    atoms: &mut AtomTable,
+    subs: &mut BoundedArr<Term, MAX_SUBTERMS>,
+    vars: &mut VarTable,
+) -> Result<Term, ParseError> {
+    let left = parse_cmp_expr(p, atoms, subs, vars)?;
+    if is_infix_atom(p, "is") {
+        p.bump();
+        let right = parse_add_expr(p, atoms, subs, vars)?;
+        return build_infix(atoms, subs, "is", left, right);
+    }
+    Ok(left)
+}
+
+fn parse_cmp_expr(
+    p: &mut Parser,
+    atoms: &mut AtomTable,
+    subs: &mut BoundedArr<Term, MAX_SUBTERMS>,
+    vars: &mut VarTable,
+) -> Result<Term, ParseError> {
+    let left = parse_add_expr(p, atoms, subs, vars)?;
+    match p.peek() {
+        Some(Token::Lt) => {
+            p.bump();
+            let right = parse_add_expr(p, atoms, subs, vars)?;
+            build_infix(atoms, subs, "<", left, right)
+        }
+        Some(Token::Gt) => {
+            p.bump();
+            let right = parse_add_expr(p, atoms, subs, vars)?;
+            build_infix(atoms, subs, ">", left, right)
+        }
+        _ => Ok(left),
+    }
+}
+
+fn parse_add_expr(
+    p: &mut Parser,
+    atoms: &mut AtomTable,
+    subs: &mut BoundedArr<Term, MAX_SUBTERMS>,
+    vars: &mut VarTable,
+) -> Result<Term, ParseError> {
+    let mut left = parse_goal(p, atoms, subs, vars)?;
+    loop {
+        let op = match p.peek() {
+            Some(Token::Plus) => "+",
+            Some(Token::Minus) => "-",
+            _ => return Ok(left),
+        };
+        p.bump();
+        let right = parse_goal(p, atoms, subs, vars)?;
+        left = build_infix(atoms, subs, op, left, right)?;
+    }
+}
+
+fn is_infix_atom(p: &Parser, name: &str) -> bool {
+    match p.peek() {
+        Some(Token::Atom(s)) => s.as_str() == name,
+        _ => false,
+    }
+}
+
+fn build_infix(
+    atoms: &mut AtomTable,
+    subs: &mut BoundedArr<Term, MAX_SUBTERMS>,
+    op: &str,
+    left: Term,
+    right: Term,
+) -> Result<Term, ParseError> {
+    let id = atoms.intern(op)?;
+    let l_idx = push_sub(subs, left)?;
+    let r_idx = push_sub(subs, right)?;
+    let mut args: BoundedArr<TermIdx, MAX_ARGS> = BoundedArr::new();
+    args.push(l_idx).map_err(|_| ParseError::TooManyArgs)?;
+    args.push(r_idx).map_err(|_| ParseError::TooManyArgs)?;
+    Ok(Term::Struct { functor: id, args })
 }
 
 fn parse_goal(

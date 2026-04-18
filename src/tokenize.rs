@@ -28,6 +28,10 @@ pub enum Token {
     Cut,
     Not,
     Query,
+    Plus,
+    Minus,
+    Lt,
+    Gt,
     Eof,
 }
 
@@ -162,6 +166,10 @@ fn punct_token(c: u8) -> Option<Token> {
         b'.' => Some(Token::Dot),
         b'|' => Some(Token::Pipe),
         b'!' => Some(Token::Cut),
+        b'+' => Some(Token::Plus),
+        b'-' => Some(Token::Minus),
+        b'<' => Some(Token::Lt),
+        b'>' => Some(Token::Gt),
         _ => None,
     }
 }
@@ -355,9 +363,12 @@ mod tests {
     }
 
     #[test]
-    fn error_standalone_minus_not_int() {
-        let err = tokenize("X - 2").unwrap_err();
-        assert!(matches!(err, TokenizeError::InvalidChar { ch: '-', .. }));
+    fn arithmetic_infix_operators_tokenize() {
+        // `X - 2` now tokenizes as Var, Minus, Int — was an error pre-014.
+        let toks = tokenize("X - 2").expect("tokenize ok");
+        assert!(matches!(toks.get(0), Some(Token::Var(_))));
+        assert!(matches!(toks.get(1), Some(Token::Minus)));
+        assert!(matches!(toks.get(2), Some(Token::Int(2))));
     }
 
     #[test]

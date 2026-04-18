@@ -1,6 +1,6 @@
 number = 13
 slug = "lists"
-status = "in-progress"
+status = "completed"
 description = """
 Add list compilation.
 
@@ -8,5 +8,6 @@ Parse.rs already desugars [H|T] to Struct('./2', [H, T..."""
 role = "production"
 context_files = []
 created_at = "2026-04-16T13:09:06"
+completed_at = "2026-04-18T15:23:14"
 task_type = "rust-module"
-commits = []
+commits = ["7e3636f12cdde301fadbdc67386565bd57e89182"]

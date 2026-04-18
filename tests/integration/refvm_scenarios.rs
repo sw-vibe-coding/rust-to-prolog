@@ -383,6 +383,32 @@ fn compiled_color_prints_all_colors_via_backtracking() {
 }
 
 #[test]
+fn compiled_sum_tail_recursion_prints_total() {
+    // sum(3, 0, X): accumulator walks 0 -> 3 -> 5 -> 6 as N counts
+    // down to 0. Exercises is/2 with + and -, >/2 on ints, and a
+    // chunk-free recursive clause (all vars stay temp).
+    let src = include_str!("../../examples/sum.pl");
+    let (r, out) = run_with_compiled_atoms(src);
+    assert_eq!(r, RunResult::Halt);
+    assert_eq!(out, "6\n");
+}
+
+#[test]
+fn compiled_arith_is_assigns_to_first_occ_var() {
+    // A simple is/2 test: `X is 2 + 3` binds X to 5.
+    let (r, out) = run_with_compiled_atoms("?- X is 2 + 3, write(X), nl.");
+    assert_eq!(r, RunResult::Halt);
+    assert_eq!(out, "5\n");
+}
+
+#[test]
+fn compiled_comparison_fails_when_false() {
+    // `3 > 5` fails outright.
+    let (r, _) = run_with_compiled_atoms("?- 3 > 5.");
+    assert_eq!(r, RunResult::Fail);
+}
+
+#[test]
 fn compiled_member_prints_each_element_via_backtracking() {
     let src = include_str!("../../examples/member.pl");
     let (r, out) = run_with_compiled_atoms(src);

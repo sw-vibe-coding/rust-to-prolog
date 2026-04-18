@@ -33,6 +33,7 @@ pub const OP_PUT_VAL: u8 = 11;
 pub const OP_PUT_CONST: u8 = 12;
 pub const OP_PUT_Y_VAL: u8 = 13;
 pub const OP_GET_VAR: u8 = 16;
+pub const OP_GET_VAL: u8 = 17;
 pub const OP_GET_CONST: u8 = 18;
 pub const OP_GET_STRUCT: u8 = 19;
 pub const OP_GET_Y_VAR: u8 = 20;
@@ -43,6 +44,10 @@ pub const OP_ALLOCATE: u8 = 28;
 pub const OP_DEALLOCATE: u8 = 29;
 pub const OP_B_WRITE: u8 = 32;
 pub const OP_B_NL: u8 = 33;
+pub const OP_B_IS_ADD: u8 = 34;
+pub const OP_B_IS_SUB: u8 = 35;
+pub const OP_B_LT: u8 = 36;
+pub const OP_B_GT: u8 = 37;
 
 pub fn step<W: std::io::Write>(vm: &mut Vm, out: &mut W) -> Result<Step, RunError> {
     if vm.pc >= vm.code.len() {
@@ -67,6 +72,7 @@ pub fn step<W: std::io::Write>(vm: &mut Vm, out: &mut W) -> Result<Step, RunErro
         OP_PUT_CONST => exec_put_const(vm, op1),
         OP_PUT_Y_VAL => exec_put_y_val(vm, op1, op2),
         OP_GET_VAR => exec_get_var(vm, op1, op2),
+        OP_GET_VAL => exec_get_val(vm, op1, op2),
         OP_GET_CONST => exec_get_const(vm, op1),
         OP_GET_STRUCT => exec_get_struct(vm, op1, op2),
         OP_GET_Y_VAR => exec_get_y_var(vm, op1, op2),
@@ -77,6 +83,10 @@ pub fn step<W: std::io::Write>(vm: &mut Vm, out: &mut W) -> Result<Step, RunErro
         OP_DEALLOCATE => exec_deallocate(vm),
         OP_B_WRITE => exec_b_write(vm, op1, out),
         OP_B_NL => exec_b_nl(vm, out),
+        OP_B_IS_ADD => exec_b_is_add(vm),
+        OP_B_IS_SUB => exec_b_is_sub(vm),
+        OP_B_LT => exec_b_lt(vm),
+        OP_B_GT => exec_b_gt(vm),
         other => Err(RunError::UnsupportedOpcode { op: other, pc: vm.pc }),
     }
 }
@@ -193,6 +203,70 @@ fn exec_get_const(vm: &mut Vm, ai: u8) -> Result<Step, RunError> {
     }
     vm.pc += 2;
     Ok(Step::Continue)
+}
+
+fn exec_get_val(vm: &mut Vm, xi: u8, ai: u8) -> Result<Step, RunError> {
+    let xi = reg_index(xi)?;
+    let ai = reg_index(ai)?;
+    let ok = unify(vm.regs[xi], vm.regs[ai], &mut vm.heap, &mut vm.trail);
+    if !ok {
+        return exec_fail(vm);
+    }
+    vm.pc += 1;
+    Ok(Step::Continue)
+}
+
+fn exec_b_is_add(vm: &mut Vm) -> Result<Step, RunError> {
+    exec_b_is_binop(vm, |a, b| a.wrapping_add(b))
+}
+
+fn exec_b_is_sub(vm: &mut Vm) -> Result<Step, RunError> {
+    exec_b_is_binop(vm, |a, b| a.wrapping_sub(b))
+}
+
+fn exec_b_is_binop<F: Fn(i32, i32) -> i32>(vm: &mut Vm, op: F) -> Result<Step, RunError> {
+    let a = deref_to_int(vm, 1)?;
+    let b = deref_to_int(vm, 2)?;
+    let r = op(a, b);
+    vm.regs[0] = encode_int(r);
+    vm.pc += 1;
+    Ok(Step::Continue)
+}
+
+fn exec_b_lt(vm: &mut Vm) -> Result<Step, RunError> {
+    exec_b_cmp(vm, |a, b| a < b)
+}
+
+fn exec_b_gt(vm: &mut Vm) -> Result<Step, RunError> {
+    exec_b_cmp(vm, |a, b| a > b)
+}
+
+fn exec_b_cmp<F: Fn(i32, i32) -> bool>(vm: &mut Vm, op: F) -> Result<Step, RunError> {
+    let a = deref_to_int(vm, 0)?;
+    let b = deref_to_int(vm, 1)?;
+    if !op(a, b) {
+        return exec_fail(vm);
+    }
+    vm.pc += 1;
+    Ok(Step::Continue)
+}
+
+fn deref_to_int(vm: &Vm, ai: u8) -> Result<i32, RunError> {
+    let cell = super::heap::deref(vm.regs[ai as usize], &vm.heap);
+    if tag(cell) != super::heap::TAG_INT {
+        return Err(RunError::ArithNotInt { ai });
+    }
+    let p = payload(cell);
+    let v = if p & (1 << 20) != 0 {
+        (p | 0xFFE0_0000) as i32
+    } else {
+        p as i32
+    };
+    Ok(v)
+}
+
+fn encode_int(v: i32) -> u32 {
+    super::heap::make(super::heap::TAG_INT, (v as u32) & 0x1F_FFFF)
 }
 
 fn exec_get_struct(vm: &mut Vm, ai: u8, arity: u8) -> Result<Step, RunError> {

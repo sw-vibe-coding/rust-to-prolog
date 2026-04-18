@@ -46,16 +46,20 @@ pub type LabelId = BoundedStr<LABEL_CAP>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Instr {
     PutConst { ai: u8, atom: AtomId },
+    PutInt { ai: u8, value: i32 },
     PutVar { ai: u8, xi: u8 },
     PutVal { ai: u8, xi: u8 },
     PutYVal { ai: u8, yi: u8 },
     GetVar { ai: u8, xi: u8 },
+    GetVal { ai: u8, xi: u8 },
     GetYVar { ai: u8, yi: u8 },
     GetConst { ai: u8, atom: AtomId },
+    GetInt { ai: u8, value: i32 },
     GetStruct { ai: u8, atom: AtomId, arity: u8 },
     UnifyVar { xi: u8 },
     UnifyVal { xi: u8 },
     UnifyConst { atom: AtomId },
+    UnifyInt { value: i32 },
     Allocate { n: u8 },
     Deallocate,
     Call { label: LabelId },
@@ -337,6 +341,7 @@ fn is_inline_builtin(goal: &Term, atoms: &AtomTable) -> bool {
         },
         Term::Struct { functor, args } => match atoms.name(*functor).map(|n| n.as_str()) {
             Some("write") => args.len() == 1,
+            Some("is") | Some("<") | Some(">") => args.len() == 2,
             _ => false,
         },
         _ => false,
@@ -476,7 +481,7 @@ fn emit_head_arg(
             push_i(out, Instr::GetConst { ai, atom: nil })
         }
         Term::Var(slot) => emit_head_var(ai, *slot, rm, out),
-        Term::Int(_) => Err(CompileError::IntArg),
+        Term::Int(n) => push_i(out, Instr::GetInt { ai, value: *n }),
         Term::Struct { functor, args } => {
             emit_head_struct(ai, *functor, args, clause, atoms, rm, out)
         }
@@ -556,12 +561,13 @@ fn emit_head_var(
             rm.mark_seen(slot);
             Ok(())
         }
+        VarRole::Temp { xi, seen: true } => push_i(out, Instr::GetVal { ai, xi }),
         VarRole::Perm { yi, seen: false } => {
             push_i(out, Instr::GetYVar { ai, yi })?;
             rm.mark_seen(slot);
             Ok(())
         }
-        VarRole::Temp { .. } | VarRole::Perm { .. } => Err(CompileError::HeadVarRepeat),
+        VarRole::Perm { .. } => Err(CompileError::HeadVarRepeat),
     }
 }
 
@@ -646,11 +652,120 @@ fn emit_inline_builtin(
                     emit_put_arg(0, &a, clause, atoms, rm, out)?;
                     push_i(out, Instr::BWrite { ai: 0 })
                 }
+                ("is", 2) => emit_is(args, clause, atoms, rm, out),
+                ("<", 2) => emit_cmp(args, clause, atoms, rm, out, true),
+                (">", 2) => emit_cmp(args, clause, atoms, rm, out, false),
                 _ => Err(CompileError::BadGoal),
             }
         }
         _ => Err(CompileError::BadGoal),
     }
+}
+
+fn emit_is(
+    args: &BoundedArr<TermIdx, MAX_ARGS>,
+    clause: &Clause,
+    atoms: &AtomTable,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    let lhs_ti = *args.get(0).expect("lhs");
+    let rhs_ti = *args.get(1).expect("rhs");
+    let lhs = *clause.subterm(lhs_ti).ok_or(CompileError::BadSubterm)?;
+    let rhs = *clause.subterm(rhs_ti).ok_or(CompileError::BadSubterm)?;
+    emit_eval_expr(&rhs, clause, atoms, rm, out)?;
+    emit_bind_a0(&lhs, rm, out)
+}
+
+fn emit_eval_expr(
+    expr: &Term,
+    clause: &Clause,
+    atoms: &AtomTable,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    match expr {
+        Term::Int(n) => push_i(out, Instr::PutInt { ai: 0, value: *n }),
+        Term::Var(slot) => emit_put_var(0, *slot, rm, out),
+        Term::Struct { functor, args } if args.len() == 2 => {
+            let name = atoms.name(*functor).ok_or(CompileError::UnknownAtom)?.as_str();
+            let op = match name {
+                "+" => Instr::BIsAdd { dst: 0, a: 1, b: 2 },
+                "-" => Instr::BIsSub { dst: 0, a: 1, b: 2 },
+                _ => return Err(CompileError::BadGoal),
+            };
+            let a_ti = *args.get(0).expect("lhs");
+            let b_ti = *args.get(1).expect("rhs");
+            let a = *clause.subterm(a_ti).ok_or(CompileError::BadSubterm)?;
+            let b = *clause.subterm(b_ti).ok_or(CompileError::BadSubterm)?;
+            emit_eval_leaf(1, &a, rm, out)?;
+            emit_eval_leaf(2, &b, rm, out)?;
+            push_i(out, op)
+        }
+        _ => Err(CompileError::BadGoal),
+    }
+}
+
+fn emit_eval_leaf(
+    ai: u8,
+    term: &Term,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    match term {
+        Term::Int(n) => push_i(out, Instr::PutInt { ai, value: *n }),
+        Term::Var(slot) => emit_put_var(ai, *slot, rm, out),
+        _ => Err(CompileError::BadGoal),
+    }
+}
+
+fn emit_bind_a0(
+    lhs: &Term,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    match lhs {
+        Term::Int(n) => push_i(out, Instr::GetInt { ai: 0, value: *n }),
+        Term::Var(slot) => match rm.get(*slot) {
+            VarRole::Temp { xi, seen: false } => {
+                push_i(out, Instr::GetVar { ai: 0, xi })?;
+                rm.mark_seen(*slot);
+                Ok(())
+            }
+            VarRole::Temp { xi, seen: true } => push_i(out, Instr::GetVal { ai: 0, xi }),
+            VarRole::Perm { yi, seen: false } => {
+                push_i(out, Instr::GetYVar { ai: 0, yi })?;
+                rm.mark_seen(*slot);
+                Ok(())
+            }
+            VarRole::Perm { .. } => Err(CompileError::HeadVarRepeat),
+            VarRole::Unused => Err(CompileError::TooManyVars),
+        },
+        _ => Err(CompileError::BadGoal),
+    }
+}
+
+fn emit_cmp(
+    args: &BoundedArr<TermIdx, MAX_ARGS>,
+    clause: &Clause,
+    atoms: &AtomTable,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+    is_lt: bool,
+) -> Result<(), CompileError> {
+    let _ = atoms;
+    let a_ti = *args.get(0).expect("lhs");
+    let b_ti = *args.get(1).expect("rhs");
+    let a = *clause.subterm(a_ti).ok_or(CompileError::BadSubterm)?;
+    let b = *clause.subterm(b_ti).ok_or(CompileError::BadSubterm)?;
+    emit_eval_leaf(0, &a, rm, out)?;
+    emit_eval_leaf(1, &b, rm, out)?;
+    let op = if is_lt {
+        Instr::BLt { a: 0, b: 1 }
+    } else {
+        Instr::BGt { a: 0, b: 1 }
+    };
+    push_i(out, op)
 }
 
 fn emit_put_args(
@@ -683,7 +798,7 @@ fn emit_put_arg(
             push_i(out, Instr::PutConst { ai, atom: nil })
         }
         Term::Var(slot) => emit_put_var(ai, *slot, rm, out),
-        Term::Int(_) => Err(CompileError::IntArg),
+        Term::Int(n) => push_i(out, Instr::PutInt { ai, value: *n }),
         Term::Struct { functor, args } => {
             emit_build_list(ai, *functor, args, clause, atoms, rm, out)
         }

@@ -48,6 +48,8 @@ pub enum RunError {
     EmptyEnvStack,
     #[error("bad Y-slot index {y}")]
     BadYSlot { y: u8 },
+    #[error("arithmetic operand in A{ai} is not an integer")]
+    ArithNotInt { ai: u8 },
     #[error("tick limit exceeded (runaway guard)")]
     TickLimit,
     #[error("io error writing builtin output")]

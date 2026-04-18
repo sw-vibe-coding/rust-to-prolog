@@ -1,0 +1,11 @@
+{
+  "task_type": "rust-module",
+  "state": {
+    "number": 13,
+    "step": "lists"
+  },
+  "action": "cargo test + scripts/run-tests.sh green gate; hand-designed the list build-up pattern (PUT_VAR head; loop: GET_STRUCT ./2 write-mode + UNIFY_CONST head + UNIFY_VAR cursor + PUT_VAL cursor; terminate UNIFY_CONST nil; PUT_VAL head) to avoid needing a PUT_STRUCT opcode LAM lacks; spent ~5 min debugging UnknownOpcode at line 42 which turned out to be a missing 'UNIFY_CONST' => Some(24) in asm.rs opcode_of (I had wired it into is_two_cell and shape_of but forgot the actual number); also fixed parse_atom_dir rejecting punctuation atom names after initially failing on '.atom 2 .'; kept perm-vars-in-unify-stream and nested non-list structs as future work since member.pl doesn't need them; used scratch_x() + 1 as the list cursor with a REG_CAP check; recursive struct-vs-struct unification in heap.rs walks FUN cells arity-many times.",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-18T15:23:14"
+}
