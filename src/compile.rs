@@ -137,6 +137,9 @@ struct RegMap {
     roles: [VarRole; MAX_CLAUSE_VARS],
     n_temp: u8,
     n_perm: u8,
+    pname: BoundedStr<NAME_CAP>,
+    clause_idx: u8,
+    neg_ix: u8,
 }
 
 impl RegMap {
@@ -145,7 +148,22 @@ impl RegMap {
             roles: [VarRole::Unused; MAX_CLAUSE_VARS],
             n_temp: 0,
             n_perm: 0,
+            pname: BoundedStr::<NAME_CAP>::new(),
+            clause_idx: 0,
+            neg_ix: 0,
         }
+    }
+
+    fn fresh_neg_label(&mut self) -> Result<LabelId, CompileError> {
+        let k = self.neg_ix;
+        self.neg_ix = self.neg_ix.saturating_add(1);
+        let mut cbuf = [0u8; 4];
+        let cs = u8_to_decimal(self.clause_idx, &mut cbuf);
+        let mut nbuf = [0u8; 4];
+        let ns = u8_to_decimal(k, &mut nbuf);
+        let pn = self.pname.as_str();
+        let parts: [&str; 5] = [pn, "_c", cs, "_neg", ns];
+        build_label(&parts)
     }
 
     fn get(&self, slot: VarSlot) -> VarRole {
@@ -288,6 +306,8 @@ fn emit_clause_body(
     push_i(out, Instr::Label(lbl_clause_body(pname, clause_idx)?))?;
     let classes = classify_clause(clause, atoms)?;
     let mut rm = assign_regs(&classes, clause, atoms)?;
+    rm.pname = *pname;
+    rm.clause_idx = clause_idx;
     if rm.has_env() {
         push_i(out, Instr::Allocate { n: rm.n_perm })?;
     }
@@ -340,8 +360,8 @@ fn is_inline_builtin(goal: &Term, atoms: &AtomTable) -> bool {
             _ => false,
         },
         Term::Struct { functor, args } => match atoms.name(*functor).map(|n| n.as_str()) {
-            Some("write") => args.len() == 1,
-            Some("is") | Some("<") | Some(">") => args.len() == 2,
+            Some("write") | Some("\\+") => args.len() == 1,
+            Some("is") | Some("<") | Some(">") | Some("=") => args.len() == 2,
             _ => false,
         },
         _ => false,
@@ -657,6 +677,8 @@ fn emit_inline_builtin(
                 ("is", 2) => emit_is(args, clause, atoms, rm, out),
                 ("<", 2) => emit_cmp(args, clause, atoms, rm, out, true),
                 (">", 2) => emit_cmp(args, clause, atoms, rm, out, false),
+                ("=", 2) => emit_eq(args, clause, atoms, rm, out),
+                ("\\+", 1) => emit_negation(args, clause, atoms, rm, out),
                 _ => Err(CompileError::BadGoal),
             }
         }
@@ -745,6 +767,67 @@ fn emit_bind_a0(
         },
         _ => Err(CompileError::BadGoal),
     }
+}
+
+fn emit_eq(
+    args: &BoundedArr<TermIdx, MAX_ARGS>,
+    clause: &Clause,
+    atoms: &AtomTable,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    let l_ti = *args.get(0).expect("lhs");
+    let r_ti = *args.get(1).expect("rhs");
+    let l = *clause.subterm(l_ti).ok_or(CompileError::BadSubterm)?;
+    let r = *clause.subterm(r_ti).ok_or(CompileError::BadSubterm)?;
+    emit_put_arg(0, &l, clause, atoms, rm, out)?;
+    let scratch = rm.scratch_x();
+    if scratch >= REG_CAP {
+        return Err(CompileError::TooManyXRegs);
+    }
+    push_i(out, Instr::GetVar { ai: 0, xi: scratch })?;
+    emit_put_arg(1, &r, clause, atoms, rm, out)?;
+    push_i(out, Instr::GetVal { ai: 1, xi: scratch })
+}
+
+fn emit_negation(
+    args: &BoundedArr<TermIdx, MAX_ARGS>,
+    clause: &Clause,
+    atoms: &AtomTable,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    let alt_label = rm.fresh_neg_label()?;
+    let g_ti = *args.get(0).expect("neg arg");
+    let g = *clause.subterm(g_ti).ok_or(CompileError::BadSubterm)?;
+    push_i(out, Instr::Try { label: alt_label })?;
+    emit_neg_inner(&g, clause, atoms, rm, out)?;
+    push_i(out, Instr::Trust { label: alt_label })?;
+    push_i(out, Instr::Fail)?;
+    push_i(out, Instr::Label(alt_label))?;
+    push_i(out, Instr::Trust { label: alt_label })
+}
+
+fn emit_neg_inner(
+    goal: &Term,
+    clause: &Clause,
+    atoms: &AtomTable,
+    rm: &mut RegMap,
+    out: &mut BoundedArr<Instr, MAX_INSTR>,
+) -> Result<(), CompileError> {
+    if is_inline_builtin(goal, atoms) {
+        return emit_inline_builtin(goal, clause, atoms, rm, out);
+    }
+    let fid = match goal {
+        Term::Atom(id) => *id,
+        Term::Struct { functor, args } => {
+            emit_put_args(args, clause, atoms, rm, out)?;
+            *functor
+        }
+        _ => return Err(CompileError::BadGoal),
+    };
+    let pname = *atoms.name(fid).ok_or(CompileError::UnknownAtom)?;
+    push_i(out, Instr::Call { label: lbl_entry(&pname)? })
 }
 
 fn emit_cmp(
@@ -949,6 +1032,9 @@ fn emit_query_clause(
     }
     let classes = classify_clause(clause, atoms)?;
     let mut rm = assign_regs(&classes, clause, atoms)?;
+    rm.pname = BoundedStr::<NAME_CAP>::from_str("q")
+        .map_err(|_| CompileError::LabelOverflow)?;
+    rm.clause_idx = 0;
     if rm.has_env() {
         push_i(out, Instr::Allocate { n: rm.n_perm })?;
     }

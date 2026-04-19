@@ -1,6 +1,6 @@
 number = 15
 slug = "cut"
-status = "in-progress"
+status = "completed"
 description = """
 Add cut (!) compilation.
 
@@ -8,5 +8,6 @@ Semantics: ! discards all choice points created sin..."""
 role = "production"
 context_files = []
 created_at = "2026-04-16T13:09:29"
+completed_at = "2026-04-18T16:42:57"
 task_type = "rust-module"
-commits = []
+commits = ["3bde407c318f440d9b75163eee2515ec3d16993c"]

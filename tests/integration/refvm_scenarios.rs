@@ -383,6 +383,39 @@ fn compiled_color_prints_all_colors_via_backtracking() {
 }
 
 #[test]
+fn compiled_negation_fails_when_goal_succeeds() {
+    // ne(red, red) should fail because red = red unifies.
+    let src = include_str!("../../examples/neq.pl");
+    let (r, out) = run_with_compiled_atoms(src);
+    assert_eq!(r, RunResult::Fail);
+    assert_eq!(out, "");
+}
+
+#[test]
+fn compiled_negation_succeeds_when_goal_fails() {
+    // ne(red, blue) — different atoms, unification fails, \+ succeeds.
+    let src = "ne(X, Y) :- \\+ X = Y. ?- ne(red, blue), write(ok), nl.";
+    let (r, out) = run_with_compiled_atoms(src);
+    assert_eq!(r, RunResult::Halt);
+    assert_eq!(out, "ok\n");
+}
+
+#[test]
+fn compiled_equality_rejects_mismatched_atoms() {
+    // Direct test of =/2 without \+: red = blue should fail.
+    let (r, _) = run_with_compiled_atoms("?- red = blue.");
+    assert_eq!(r, RunResult::Fail);
+}
+
+#[test]
+fn compiled_equality_binds_unbound_variables() {
+    // X = 42 binds X, subsequent write(X) prints 42.
+    let (r, out) = run_with_compiled_atoms("?- X = 42, write(X), nl.");
+    assert_eq!(r, RunResult::Halt);
+    assert_eq!(out, "42\n");
+}
+
+#[test]
 fn compiled_max_with_cut_commits_to_first_clause() {
     // max.pl: max(5, 3, M) fires the first clause (5 > 3, !, M=5).
     // The cut removes the second clause's choice point, so the

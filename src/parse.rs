@@ -311,6 +311,11 @@ fn parse_cmp_expr(
             let right = parse_add_expr(p, atoms, subs, vars)?;
             build_infix(atoms, subs, ">", left, right)
         }
+        Some(Token::Eq) => {
+            p.bump();
+            let right = parse_add_expr(p, atoms, subs, vars)?;
+            build_infix(atoms, subs, "=", left, right)
+        }
         _ => Ok(left),
     }
 }
@@ -371,7 +376,7 @@ fn parse_goal(
         }
         Some(Token::Not) => {
             p.bump();
-            let inner = parse_goal(p, atoms, subs, vars)?;
+            let inner = parse_cmp_expr(p, atoms, subs, vars)?;
             let id = atoms.intern("\\+")?;
             let idx = push_sub(subs, inner)?;
             let mut args: BoundedArr<TermIdx, MAX_ARGS> = BoundedArr::new();

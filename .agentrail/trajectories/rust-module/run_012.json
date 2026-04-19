@@ -1,0 +1,11 @@
+{
+  "task_type": "rust-module",
+  "state": {
+    "number": 15,
+    "step": "cut"
+  },
+  "action": "cargo test green gate; initial implementation saved_b=choice.len() at ALLOCATE time didn't kill the TRY choice point (saved_b equalled the post-TRY stack size, so CUT's truncate was a no-op); simplified to upstream's 'clear all choice points' semantics after reading vm_ctrl.plsw; documented the scoped-cut limitation in exec_cut and noted both refvm and upstream will need the same upgrade when nested cut is required; added a control test (max without cut) that proves the cut is actually changing behaviour rather than masking it.",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-18T16:42:57"
+}

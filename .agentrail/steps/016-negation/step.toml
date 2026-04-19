@@ -1,6 +1,6 @@
 number = 16
 slug = "negation"
-status = "pending"
+status = "in-progress"
 description = '''
 Add negation-as-failure (\\+ Goal).
 

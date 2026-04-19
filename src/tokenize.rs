@@ -32,6 +32,7 @@ pub enum Token {
     Minus,
     Lt,
     Gt,
+    Eq,
     Eof,
 }
 
@@ -170,6 +171,7 @@ fn punct_token(c: u8) -> Option<Token> {
         b'-' => Some(Token::Minus),
         b'<' => Some(Token::Lt),
         b'>' => Some(Token::Gt),
+        b'=' => Some(Token::Eq),
         _ => None,
     }
 }
