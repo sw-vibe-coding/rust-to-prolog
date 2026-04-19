@@ -1,5 +1,12 @@
 # rust-to-prolog
 
+**Live demo:** <https://sw-vibe-coding.github.io/rust-to-prolog/> —
+the full Rust compiler + reference VM running in your browser as WASM.
+Twelve canonical Prolog demos (ancestor, append, color, fib, **liar**,
+max, member, neq × 2, path × 2, sum) are bundled; pick one, hit Run.
+
+[![rust-to-prolog live demo: liar puzzle solved to "thursday"](images/screenshot.png?ts=1776578699034)](https://sw-vibe-coding.github.io/rust-to-prolog/)
+
 A port-aware Rust implementation of a Prolog compiler and reference
 VM, targeting the LAM (Logic Abstract Machine) bytecode from the
 [`sw-cor24-prolog`](https://github.com/sw-embed/sw-cor24-prolog)
