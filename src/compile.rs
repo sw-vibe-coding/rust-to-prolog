@@ -32,8 +32,8 @@
 //! `CUT` (014).
 
 use crate::parse::{
-    AtomId, AtomTable, Clause, ClauseKind, Term, TermIdx, VarSlot,
-    MAX_ARGS, MAX_BODY, MAX_CLAUSES, MAX_CLAUSE_VARS, NAME_CAP,
+    AtomId, AtomTable, Clause, ClauseKind, Term, TermIdx, VarSlot, MAX_ARGS, MAX_BODY, MAX_CLAUSES,
+    MAX_CLAUSE_VARS, NAME_CAP,
 };
 use crate::port::{BoundedArr, BoundedStr};
 use thiserror::Error;
@@ -45,40 +45,113 @@ pub type LabelId = BoundedStr<LABEL_CAP>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Instr {
-    PutConst { ai: u8, atom: AtomId },
-    PutInt { ai: u8, value: i32 },
-    PutVar { ai: u8, xi: u8 },
-    PutVal { ai: u8, xi: u8 },
-    PutYVal { ai: u8, yi: u8 },
-    GetVar { ai: u8, xi: u8 },
-    GetVal { ai: u8, xi: u8 },
-    GetYVar { ai: u8, yi: u8 },
-    GetConst { ai: u8, atom: AtomId },
-    GetInt { ai: u8, value: i32 },
-    GetStruct { ai: u8, atom: AtomId, arity: u8 },
-    UnifyVar { xi: u8 },
-    UnifyVal { xi: u8 },
-    UnifyConst { atom: AtomId },
-    UnifyInt { value: i32 },
-    Allocate { n: u8 },
+    PutConst {
+        ai: u8,
+        atom: AtomId,
+    },
+    PutInt {
+        ai: u8,
+        value: i32,
+    },
+    PutVar {
+        ai: u8,
+        xi: u8,
+    },
+    PutVal {
+        ai: u8,
+        xi: u8,
+    },
+    PutYVal {
+        ai: u8,
+        yi: u8,
+    },
+    GetVar {
+        ai: u8,
+        xi: u8,
+    },
+    GetVal {
+        ai: u8,
+        xi: u8,
+    },
+    GetYVar {
+        ai: u8,
+        yi: u8,
+    },
+    GetConst {
+        ai: u8,
+        atom: AtomId,
+    },
+    GetInt {
+        ai: u8,
+        value: i32,
+    },
+    GetStruct {
+        ai: u8,
+        atom: AtomId,
+        arity: u8,
+    },
+    UnifyVar {
+        xi: u8,
+    },
+    UnifyVal {
+        xi: u8,
+    },
+    UnifyConst {
+        atom: AtomId,
+    },
+    UnifyInt {
+        value: i32,
+    },
+    Allocate {
+        n: u8,
+    },
     Deallocate,
-    Call { label: LabelId },
-    Execute { label: LabelId },
+    Call {
+        label: LabelId,
+    },
+    Execute {
+        label: LabelId,
+    },
     Proceed,
-    Try { label: LabelId },
-    Retry { label: LabelId },
-    Trust { label: LabelId },
+    Try {
+        label: LabelId,
+    },
+    Retry {
+        label: LabelId,
+    },
+    Trust {
+        label: LabelId,
+    },
     Cut,
     Fail,
-    BWrite { ai: u8 },
+    BWrite {
+        ai: u8,
+    },
     BNl,
-    BIsAdd { dst: u8, a: u8, b: u8 },
-    BIsSub { dst: u8, a: u8, b: u8 },
-    BLt { a: u8, b: u8 },
-    BGt { a: u8, b: u8 },
+    BIsAdd {
+        dst: u8,
+        a: u8,
+        b: u8,
+    },
+    BIsSub {
+        dst: u8,
+        a: u8,
+        b: u8,
+    },
+    BLt {
+        a: u8,
+        b: u8,
+    },
+    BGt {
+        a: u8,
+        b: u8,
+    },
     Halt,
     Label(LabelId),
-    AtomDir { id: AtomId, name: BoundedStr<NAME_CAP> },
+    AtomDir {
+        id: AtomId,
+        name: BoundedStr<NAME_CAP>,
+    },
 }
 
 #[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
@@ -194,7 +267,12 @@ pub fn compile(
     let query_ix = find_query(clauses)?;
     let mut out: BoundedArr<Instr, MAX_INSTR> = BoundedArr::new();
     emit_atom_dirs(atoms, &mut out)?;
-    push_i(&mut out, Instr::Execute { label: lbl_query()? })?;
+    push_i(
+        &mut out,
+        Instr::Execute {
+            label: lbl_query()?,
+        },
+    )?;
     emit_all_predicates(clauses, query_ix, atoms, &mut out)?;
     emit_query_clause(
         clauses.get(query_ix).expect("query index in range"),
@@ -326,8 +404,8 @@ fn classify_clause(
     let n_goals = clause.body.len();
     let mut goal_chunk = [0usize; MAX_BODY];
     let mut chunk_ix = 0usize;
-    for i in 0..n_goals {
-        goal_chunk[i] = chunk_ix;
+    for (i, slot) in goal_chunk.iter_mut().take(n_goals).enumerate() {
+        *slot = chunk_ix;
         let is_last = i + 1 == n_goals;
         let g = *clause.body.get(i).expect("goal");
         if !is_inline_builtin(&g, atoms) && !is_last {
@@ -337,9 +415,9 @@ fn classify_clause(
     let n_chunks = chunk_ix + 1;
     let mut hits = [[false; MAX_BODY]; MAX_CLAUSE_VARS];
     mark_vars(&clause.head, clause, &mut hits, 0)?;
-    for i in 0..n_goals {
+    for (i, &chunk) in goal_chunk.iter().take(n_goals).enumerate() {
         let g = *clause.body.get(i).expect("goal");
-        mark_vars(&g, clause, &mut hits, goal_chunk[i])?;
+        mark_vars(&g, clause, &mut hits, chunk)?;
     }
     let mut classes = [Class::Unused; MAX_CLAUSE_VARS];
     for slot in 0..MAX_CLAUSE_VARS {
@@ -355,10 +433,10 @@ fn classify_clause(
 
 fn is_inline_builtin(goal: &Term, atoms: &AtomTable) -> bool {
     match goal {
-        Term::Atom(id) => match atoms.name(*id).map(|n| n.as_str()) {
-            Some("nl") | Some("fail") | Some("!") => true,
-            _ => false,
-        },
+        Term::Atom(id) => matches!(
+            atoms.name(*id).map(|n| n.as_str()),
+            Some("nl") | Some("fail") | Some("!")
+        ),
         Term::Struct { functor, args } => match atoms.name(*functor).map(|n| n.as_str()) {
             Some("write") | Some("\\+") => args.len() == 1,
             Some("is") | Some("<") | Some(">") | Some("=") => args.len() == 2,
@@ -443,7 +521,10 @@ fn assign_slot(
             if rm.n_temp >= REG_CAP {
                 return Err(CompileError::TooManyXRegs);
             }
-            rm.roles[ix] = VarRole::Temp { xi: rm.n_temp, seen: false };
+            rm.roles[ix] = VarRole::Temp {
+                xi: rm.n_temp,
+                seen: false,
+            };
             rm.n_temp += 1;
             Ok(())
         }
@@ -451,7 +532,10 @@ fn assign_slot(
             if rm.n_perm >= REG_CAP {
                 return Err(CompileError::TooManyYRegs);
             }
-            rm.roles[ix] = VarRole::Perm { yi: rm.n_perm, seen: false };
+            rm.roles[ix] = VarRole::Perm {
+                yi: rm.n_perm,
+                seen: false,
+            };
             rm.n_perm += 1;
             Ok(())
         }
@@ -520,7 +604,11 @@ fn emit_head_struct(
 ) -> Result<(), CompileError> {
     push_i(
         out,
-        Instr::GetStruct { ai, atom: functor, arity: args.len() as u8 },
+        Instr::GetStruct {
+            ai,
+            atom: functor,
+            arity: args.len() as u8,
+        },
     )?;
     for i in 0..args.len() {
         let ti = *args.get(i).expect("arg in range");
@@ -666,7 +754,10 @@ fn emit_inline_builtin(
             }
         }
         Term::Struct { functor, args } => {
-            let name = atoms.name(*functor).ok_or(CompileError::UnknownAtom)?.as_str();
+            let name = atoms
+                .name(*functor)
+                .ok_or(CompileError::UnknownAtom)?
+                .as_str();
             match (name, args.len()) {
                 ("write", 1) => {
                     let ti = *args.get(0).expect("one arg");
@@ -712,7 +803,10 @@ fn emit_eval_expr(
         Term::Int(n) => push_i(out, Instr::PutInt { ai: 0, value: *n }),
         Term::Var(slot) => emit_put_var(0, *slot, rm, out),
         Term::Struct { functor, args } if args.len() == 2 => {
-            let name = atoms.name(*functor).ok_or(CompileError::UnknownAtom)?.as_str();
+            let name = atoms
+                .name(*functor)
+                .ok_or(CompileError::UnknownAtom)?
+                .as_str();
             let op = match name {
                 "+" => Instr::BIsAdd { dst: 0, a: 1, b: 2 },
                 "-" => Instr::BIsSub { dst: 0, a: 1, b: 2 },
@@ -827,7 +921,12 @@ fn emit_neg_inner(
         _ => return Err(CompileError::BadGoal),
     };
     let pname = *atoms.name(fid).ok_or(CompileError::UnknownAtom)?;
-    push_i(out, Instr::Call { label: lbl_entry(&pname)? })
+    push_i(
+        out,
+        Instr::Call {
+            label: lbl_entry(&pname)?,
+        },
+    )
 }
 
 fn emit_cmp(
@@ -929,16 +1028,30 @@ fn emit_list_spine(
     let mut cur_head_ti = *first_args.get(0).expect("cons head");
     let mut cur_tail_ti = *first_args.get(1).expect("cons tail");
     loop {
-        push_i(out, Instr::GetStruct { ai, atom: dot_id, arity: 2 })?;
-        let head = *clause.subterm(cur_head_ti).ok_or(CompileError::BadSubterm)?;
-        let tail = *clause.subterm(cur_tail_ti).ok_or(CompileError::BadSubterm)?;
+        push_i(
+            out,
+            Instr::GetStruct {
+                ai,
+                atom: dot_id,
+                arity: 2,
+            },
+        )?;
+        let head = *clause
+            .subterm(cur_head_ti)
+            .ok_or(CompileError::BadSubterm)?;
+        let tail = *clause
+            .subterm(cur_tail_ti)
+            .ok_or(CompileError::BadSubterm)?;
         emit_list_element(&head, atoms, rm, out)?;
         match tail {
             Term::Nil => {
                 push_i(out, Instr::UnifyConst { atom: nil_id })?;
                 return Ok(());
             }
-            Term::Struct { functor, args: next } if functor == dot_id && next.len() == 2 => {
+            Term::Struct {
+                functor,
+                args: next,
+            } if functor == dot_id && next.len() == 2 => {
                 push_i(out, Instr::UnifyVar { xi: cursor_x })?;
                 push_i(out, Instr::PutVal { ai, xi: cursor_x })?;
                 cur_head_ti = *next.get(0).expect("cons head");
@@ -1002,10 +1115,25 @@ fn emit_dispatcher(
 ) -> Result<(), CompileError> {
     push_i(out, Instr::Label(lbl_entry(pname)?))?;
     if clause_count == 1 {
-        return push_i(out, Instr::Execute { label: lbl_clause_body(pname, 1)? });
+        return push_i(
+            out,
+            Instr::Execute {
+                label: lbl_clause_body(pname, 1)?,
+            },
+        );
     }
-    push_i(out, Instr::Try { label: lbl_clause(pname, 2)? })?;
-    push_i(out, Instr::Execute { label: lbl_clause_body(pname, 1)? })?;
+    push_i(
+        out,
+        Instr::Try {
+            label: lbl_clause(pname, 2)?,
+        },
+    )?;
+    push_i(
+        out,
+        Instr::Execute {
+            label: lbl_clause_body(pname, 1)?,
+        },
+    )?;
     let mut k = 2u8;
     while k <= clause_count {
         push_i(out, Instr::Label(lbl_clause(pname, k)?))?;
@@ -1013,7 +1141,12 @@ fn emit_dispatcher(
         if k == clause_count {
             push_i(out, Instr::Trust { label: cbody })?;
         } else {
-            push_i(out, Instr::Retry { label: lbl_clause(pname, k + 1)? })?;
+            push_i(
+                out,
+                Instr::Retry {
+                    label: lbl_clause(pname, k + 1)?,
+                },
+            )?;
         }
         push_i(out, Instr::Execute { label: cbody })?;
         k += 1;
@@ -1032,8 +1165,7 @@ fn emit_query_clause(
     }
     let classes = classify_clause(clause, atoms)?;
     let mut rm = assign_regs(&classes, clause, atoms)?;
-    rm.pname = BoundedStr::<NAME_CAP>::from_str("q")
-        .map_err(|_| CompileError::LabelOverflow)?;
+    rm.pname = BoundedStr::<NAME_CAP>::parse_str("q").map_err(|_| CompileError::LabelOverflow)?;
     rm.clause_idx = 0;
     if rm.has_env() {
         push_i(out, Instr::Allocate { n: rm.n_perm })?;
@@ -1067,7 +1199,12 @@ fn emit_query_goal(
         _ => return Err(CompileError::BadGoal),
     };
     let pname = *atoms.name(fid).ok_or(CompileError::UnknownAtom)?;
-    push_i(out, Instr::Call { label: lbl_entry(&pname)? })
+    push_i(
+        out,
+        Instr::Call {
+            label: lbl_entry(&pname)?,
+        },
+    )
 }
 
 fn lbl_query() -> Result<LabelId, CompileError> {
@@ -1075,7 +1212,7 @@ fn lbl_query() -> Result<LabelId, CompileError> {
 }
 
 fn mk_label_str(s: &str) -> Result<LabelId, CompileError> {
-    BoundedStr::<LABEL_CAP>::from_str(s).map_err(|_| CompileError::LabelOverflow)
+    BoundedStr::<LABEL_CAP>::parse_str(s).map_err(|_| CompileError::LabelOverflow)
 }
 
 fn lbl_entry(pname: &BoundedStr<NAME_CAP>) -> Result<LabelId, CompileError> {
@@ -1107,7 +1244,7 @@ fn build_label(parts: &[&str]) -> Result<LabelId, CompileError> {
         pos += b.len();
     }
     let s = core::str::from_utf8(&buf[..pos]).expect("ascii label parts");
-    BoundedStr::<LABEL_CAP>::from_str(s).map_err(|_| CompileError::LabelOverflow)
+    BoundedStr::<LABEL_CAP>::parse_str(s).map_err(|_| CompileError::LabelOverflow)
 }
 
 fn u8_to_decimal(n: u8, buf: &mut [u8; 4]) -> &str {

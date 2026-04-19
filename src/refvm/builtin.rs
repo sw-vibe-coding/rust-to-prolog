@@ -4,7 +4,9 @@
 //! output without touching stdout. Integer sign-extension follows
 //! `vm-spec.md` §1.3: bit 20 of the 21-bit payload is the sign.
 
-use super::heap::{deref, fun_arity, fun_atom_id, payload, tag, TAG_ATOM, TAG_FUN, TAG_INT, TAG_REF, TAG_STR};
+use super::heap::{
+    deref, fun_arity, fun_atom_id, payload, tag, TAG_ATOM, TAG_FUN, TAG_INT, TAG_REF, TAG_STR,
+};
 use std::io::{self, Write};
 
 const INT_SIGN_BIT: u32 = 1 << 20;

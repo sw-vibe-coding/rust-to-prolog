@@ -27,10 +27,7 @@ pub enum EmitError {
     Fmt,
 }
 
-pub fn emit(
-    instrs: &BoundedArr<Instr, MAX_INSTR>,
-    atoms: &AtomTable,
-) -> Result<String, EmitError> {
+pub fn emit(instrs: &BoundedArr<Instr, MAX_INSTR>, atoms: &AtomTable) -> Result<String, EmitError> {
     let mut out = String::with_capacity(1024);
     for i in 0..instrs.len() {
         let cur = instrs.get(i).expect("index in range");
@@ -64,9 +61,7 @@ fn is_section_label(name: &str) -> bool {
 
 fn emit_one(instr: &Instr, atoms: &AtomTable, out: &mut String) -> Result<(), EmitError> {
     match instr {
-        Instr::AtomDir { id, name } => {
-            wf(out, format_args!(".atom {} {}", id, name.as_str()))
-        }
+        Instr::AtomDir { id, name } => wf(out, format_args!(".atom {} {}", id, name.as_str())),
         Instr::Label(l) => wf(out, format_args!("{}:", l.as_str())),
         _ => emit_instr(instr, atoms, out),
     }
@@ -110,7 +105,12 @@ fn emit_instr(instr: &Instr, atoms: &AtomTable, out: &mut String) -> Result<(), 
     }
 }
 
-fn emit_put_const(ai: u8, atom: AtomId, atoms: &AtomTable, out: &mut String) -> Result<(), EmitError> {
+fn emit_put_const(
+    ai: u8,
+    atom: AtomId,
+    atoms: &AtomTable,
+    out: &mut String,
+) -> Result<(), EmitError> {
     let n = atom_name(atoms, atom)?;
     wf(out, format_args!("    PUT_CONST A{ai}, atom({n})"))
 }
@@ -120,7 +120,12 @@ fn emit_unify_const(atom: AtomId, atoms: &AtomTable, out: &mut String) -> Result
     wf(out, format_args!("    UNIFY_CONST atom({n})"))
 }
 
-fn emit_get_const(ai: u8, atom: AtomId, atoms: &AtomTable, out: &mut String) -> Result<(), EmitError> {
+fn emit_get_const(
+    ai: u8,
+    atom: AtomId,
+    atoms: &AtomTable,
+    out: &mut String,
+) -> Result<(), EmitError> {
     let n = atom_name(atoms, atom)?;
     wf(out, format_args!("    GET_CONST A{ai}, atom({n})"))
 }
@@ -137,7 +142,10 @@ fn emit_get_struct(
 }
 
 fn atom_name(atoms: &AtomTable, id: AtomId) -> Result<&str, EmitError> {
-    atoms.name(id).map(|n| n.as_str()).ok_or(EmitError::UnknownAtom)
+    atoms
+        .name(id)
+        .map(|n| n.as_str())
+        .ok_or(EmitError::UnknownAtom)
 }
 
 fn wf(out: &mut String, args: core::fmt::Arguments<'_>) -> Result<(), EmitError> {
@@ -166,11 +174,11 @@ mod tests {
     }
 
     fn lbl(s: &str) -> BoundedStr<LABEL_CAP> {
-        BoundedStr::<LABEL_CAP>::from_str(s).expect("label fits")
+        BoundedStr::<LABEL_CAP>::parse_str(s).expect("label fits")
     }
 
     fn nm(s: &str) -> BoundedStr<NAME_CAP> {
-        BoundedStr::<NAME_CAP>::from_str(s).expect("name fits")
+        BoundedStr::<NAME_CAP>::parse_str(s).expect("name fits")
     }
 
     fn one(i: Instr) -> String {
@@ -197,14 +205,26 @@ mod tests {
 
     #[test]
     fn format_trust_has_no_operand() {
-        assert_eq!(one(Instr::Trust { label: lbl("p_c2_body") }), "    TRUST\n");
+        assert_eq!(
+            one(Instr::Trust {
+                label: lbl("p_c2_body")
+            }),
+            "    TRUST\n"
+        );
     }
 
     #[test]
     fn format_call_and_execute() {
-        assert_eq!(one(Instr::Call { label: lbl("p_entry") }), "    CALL p_entry\n");
         assert_eq!(
-            one(Instr::Execute { label: lbl("p_c1_body") }),
+            one(Instr::Call {
+                label: lbl("p_entry")
+            }),
+            "    CALL p_entry\n"
+        );
+        assert_eq!(
+            one(Instr::Execute {
+                label: lbl("p_c1_body")
+            }),
             "    EXECUTE p_c1_body\n"
         );
     }
@@ -222,7 +242,11 @@ mod tests {
         let mut atoms = AtomTable::new();
         let id = atoms.intern("bob").expect("intern");
         let mut prog: BoundedArr<Instr, MAX_INSTR> = BoundedArr::new();
-        prog.push(Instr::AtomDir { id, name: nm("bob") }).expect("dir");
+        prog.push(Instr::AtomDir {
+            id,
+            name: nm("bob"),
+        })
+        .expect("dir");
         prog.push(Instr::PutConst { ai: 0, atom: id }).expect("pc");
         let out = emit(&prog, &atoms).expect("emit ok");
         // Blank line separates atom-dir preamble from the first non-dir
@@ -235,7 +259,10 @@ mod tests {
         let prog = {
             let mut p: BoundedArr<Instr, MAX_INSTR> = BoundedArr::new();
             p.push(Instr::Label(lbl("parent_c2"))).expect("lbl");
-            p.push(Instr::Trust { label: lbl("parent_c2_body") }).expect("t");
+            p.push(Instr::Trust {
+                label: lbl("parent_c2_body"),
+            })
+            .expect("t");
             p
         };
         let out = emit(&prog, &AtomTable::new()).expect("emit ok");
@@ -250,7 +277,10 @@ mod tests {
         prog.push(Instr::Label(lbl("p_c2_body"))).expect("l1");
         prog.push(Instr::Proceed).expect("p2");
         prog.push(Instr::Label(lbl("p_entry"))).expect("l2");
-        prog.push(Instr::Execute { label: lbl("p_c1_body") }).expect("e");
+        prog.push(Instr::Execute {
+            label: lbl("p_c1_body"),
+        })
+        .expect("e");
         let out = emit(&prog, &AtomTable::new()).expect("emit ok");
         let expected =
             "    PROCEED\n\np_c2_body:\n    PROCEED\n\np_entry:\n    EXECUTE p_c1_body\n";

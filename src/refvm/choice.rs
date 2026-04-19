@@ -73,8 +73,8 @@ pub fn top_alt(stack: &[ChoicePt]) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::heap::{alloc_unbound, bind, deref, is_unbound, make, tag, TAG_ATOM};
+    use super::*;
 
     fn noop_env(_: usize) {}
 
@@ -161,7 +161,9 @@ mod tests {
         let mut trail = Vec::new();
         let mut saw: Option<usize> = None;
         let mut regs = [0u32; 16];
-        restore_top(&stack, &mut regs, &mut heap, &mut trail, |ep| saw = Some(ep));
+        restore_top(&stack, &mut regs, &mut heap, &mut trail, |ep| {
+            saw = Some(ep)
+        });
         assert_eq!(saw, Some(3));
     }
 }

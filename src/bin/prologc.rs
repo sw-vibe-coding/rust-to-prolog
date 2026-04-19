@@ -57,7 +57,9 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let code: Vec<u32> = (0..cells.len()).map(|i| *cells.get(i).expect("in range")).collect();
+    let code: Vec<u32> = (0..cells.len())
+        .map(|i| *cells.get(i).expect("in range"))
+        .collect();
     let names: Vec<String> = (0..atoms.len() as AtomId)
         .map(|i| atoms.name(i).expect("id in range").as_str().to_string())
         .collect();

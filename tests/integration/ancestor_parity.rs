@@ -57,7 +57,13 @@ fn decode(cells: &[u32]) -> Vec<Decoded> {
         } else {
             (None, 1)
         };
-        out.push(Decoded { addr: i, opcode, op1, op2, imm });
+        out.push(Decoded {
+            addr: i,
+            opcode,
+            op1,
+            op2,
+            imm,
+        });
         i += width;
     }
     out
@@ -96,12 +102,26 @@ fn ancestor_bytecode_uses_only_expected_opcodes() {
 fn ancestor_bytecode_has_balanced_env_frame() {
     let cells = cells_of();
     let decoded = decode(&cells);
-    assert_eq!(count_opcode(&decoded, 28), 1, "expected exactly one ALLOCATE");
-    assert_eq!(count_opcode(&decoded, 29), 1, "expected exactly one DEALLOCATE");
+    assert_eq!(
+        count_opcode(&decoded, 28),
+        1,
+        "expected exactly one ALLOCATE"
+    );
+    assert_eq!(
+        count_opcode(&decoded, 29),
+        1,
+        "expected exactly one DEALLOCATE"
+    );
 
     // ALLOCATE must come before DEALLOCATE in cell order.
-    let alloc_ix = decoded.iter().position(|d| d.opcode == 28).expect("ALLOCATE present");
-    let dealloc_ix = decoded.iter().position(|d| d.opcode == 29).expect("DEALLOCATE present");
+    let alloc_ix = decoded
+        .iter()
+        .position(|d| d.opcode == 28)
+        .expect("ALLOCATE present");
+    let dealloc_ix = decoded
+        .iter()
+        .position(|d| d.opcode == 29)
+        .expect("DEALLOCATE present");
     assert!(alloc_ix < dealloc_ix, "ALLOCATE must precede DEALLOCATE");
 
     // ALLOCATE's op1 is the frame size. Conservative 2-Y layout.
@@ -125,9 +145,21 @@ fn ancestor_bytecode_has_two_try_trust_pairs() {
     // predicate has 3+ clauses.
     let cells = cells_of();
     let decoded = decode(&cells);
-    assert_eq!(count_opcode(&decoded, 6), 2, "expected 2 TRY (one per predicate)");
-    assert_eq!(count_opcode(&decoded, 8), 2, "expected 2 TRUST (one per predicate)");
-    assert_eq!(count_opcode(&decoded, 7), 0, "expected 0 RETRY (2-clause preds)");
+    assert_eq!(
+        count_opcode(&decoded, 6),
+        2,
+        "expected 2 TRY (one per predicate)"
+    );
+    assert_eq!(
+        count_opcode(&decoded, 8),
+        2,
+        "expected 2 TRUST (one per predicate)"
+    );
+    assert_eq!(
+        count_opcode(&decoded, 7),
+        0,
+        "expected 0 RETRY (2-clause preds)"
+    );
 }
 
 #[test]
@@ -138,7 +170,11 @@ fn ancestor_bytecode_emits_one_nontail_call_to_parent() {
     // parent (EXECUTE, no env frame needed).
     let cells = cells_of();
     let decoded = decode(&cells);
-    assert_eq!(count_opcode(&decoded, 2), 2, "expected 2 CALLs (query+ancestor_c2_body)");
+    assert_eq!(
+        count_opcode(&decoded, 2),
+        2,
+        "expected 2 CALLs (query+ancestor_c2_body)"
+    );
 }
 
 #[test]
@@ -155,5 +191,9 @@ fn ancestor_bytecode_uses_three_y_slot_ops() {
 #[test]
 fn ancestor_bytecode_cell_count_matches_golden() {
     let cells = cells_of();
-    assert_eq!(cells.len(), 52, "cell count changed — inspect bytecode drift");
+    assert_eq!(
+        cells.len(),
+        52,
+        "cell count changed — inspect bytecode drift"
+    );
 }

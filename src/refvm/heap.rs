@@ -119,12 +119,7 @@ pub fn unify(a: u32, b: u32, heap: &mut Vec<u32>, trail: &mut Vec<u32>) -> bool 
     false
 }
 
-fn unify_struct(
-    a_addr: usize,
-    b_addr: usize,
-    heap: &mut Vec<u32>,
-    trail: &mut Vec<u32>,
-) -> bool {
+fn unify_struct(a_addr: usize, b_addr: usize, heap: &mut Vec<u32>, trail: &mut Vec<u32>) -> bool {
     if a_addr >= heap.len() || b_addr >= heap.len() {
         return false;
     }

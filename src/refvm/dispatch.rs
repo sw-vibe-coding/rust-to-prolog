@@ -59,8 +59,14 @@ pub fn step<W: std::io::Write>(vm: &mut Vm, out: &mut W) -> Result<Step, RunErro
     let op1 = ((cell >> 8) & 0xFF) as u8;
     let op2 = (cell & 0xFF) as u8;
     match opcode {
-        OP_NOP => { vm.pc += 1; Ok(Step::Continue) }
-        OP_HALT => { vm.pc += 1; Ok(Step::Halt) }
+        OP_NOP => {
+            vm.pc += 1;
+            Ok(Step::Continue)
+        }
+        OP_HALT => {
+            vm.pc += 1;
+            Ok(Step::Halt)
+        }
         OP_PROCEED => exec_proceed(vm),
         OP_FAIL => exec_fail(vm),
         OP_CALL => exec_call(vm),
@@ -89,7 +95,10 @@ pub fn step<W: std::io::Write>(vm: &mut Vm, out: &mut W) -> Result<Step, RunErro
         OP_B_IS_SUB => exec_b_is_sub(vm),
         OP_B_LT => exec_b_lt(vm),
         OP_B_GT => exec_b_gt(vm),
-        other => Err(RunError::UnsupportedOpcode { op: other, pc: vm.pc }),
+        other => Err(RunError::UnsupportedOpcode {
+            op: other,
+            pc: vm.pc,
+        }),
     }
 }
 
@@ -139,9 +148,15 @@ fn exec_try(vm: &mut Vm) -> Result<Step, RunError> {
 fn exec_retry(vm: &mut Vm) -> Result<Step, RunError> {
     let new_alt = read_imm(vm)?;
     let ep_slot = &mut vm.ep;
-    let saved_cp = restore_top(&vm.choice, &mut vm.regs, &mut vm.heap, &mut vm.trail, |ep| {
-        *ep_slot = ep;
-    })
+    let saved_cp = restore_top(
+        &vm.choice,
+        &mut vm.regs,
+        &mut vm.heap,
+        &mut vm.trail,
+        |ep| {
+            *ep_slot = ep;
+        },
+    )
     .ok_or(RunError::EmptyChoiceStack)?;
     vm.cp = saved_cp;
     update_alt(&mut vm.choice, new_alt);
@@ -151,9 +166,15 @@ fn exec_retry(vm: &mut Vm) -> Result<Step, RunError> {
 
 fn exec_trust(vm: &mut Vm) -> Result<Step, RunError> {
     let ep_slot = &mut vm.ep;
-    let saved_cp = restore_top(&vm.choice, &mut vm.regs, &mut vm.heap, &mut vm.trail, |ep| {
-        *ep_slot = ep;
-    })
+    let saved_cp = restore_top(
+        &vm.choice,
+        &mut vm.regs,
+        &mut vm.heap,
+        &mut vm.trail,
+        |ep| {
+            *ep_slot = ep;
+        },
+    )
     .ok_or(RunError::EmptyChoiceStack)?;
     vm.cp = saved_cp;
     pop(&mut vm.choice);
@@ -452,11 +473,7 @@ fn exec_put_y_val(vm: &mut Vm, yi: u8, ai: u8) -> Result<Step, RunError> {
     Ok(Step::Continue)
 }
 
-fn exec_b_write<W: std::io::Write>(
-    vm: &mut Vm,
-    ai: u8,
-    out: &mut W,
-) -> Result<Step, RunError> {
+fn exec_b_write<W: std::io::Write>(vm: &mut Vm, ai: u8, out: &mut W) -> Result<Step, RunError> {
     let ai = reg_index(ai)?;
     write_term(vm.regs[ai], &vm.heap, &vm.atoms, out).map_err(|_| RunError::Io)?;
     vm.pc += 1;

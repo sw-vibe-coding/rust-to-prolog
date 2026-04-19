@@ -88,12 +88,16 @@ struct AtomTab {
 
 impl AtomTab {
     fn new() -> Self {
-        Self { data: BoundedArr::new() }
+        Self {
+            data: BoundedArr::new(),
+        }
     }
 
     fn insert(&mut self, name: &str, id: u32, line: u32) -> Result<(), AsmError> {
-        let key = AName::from_str(name).map_err(|_| AsmError::NameTooLong { line })?;
-        self.data.push((key, id)).map_err(|_| AsmError::AtomOverflow)
+        let key = AName::parse_str(name).map_err(|_| AsmError::NameTooLong { line })?;
+        self.data
+            .push((key, id))
+            .map_err(|_| AsmError::AtomOverflow)
     }
 
     fn get(&self, name: &str) -> Option<u32> {
@@ -113,12 +117,16 @@ struct LblTab {
 
 impl LblTab {
     fn new() -> Self {
-        Self { data: BoundedArr::new() }
+        Self {
+            data: BoundedArr::new(),
+        }
     }
 
     fn insert(&mut self, name: &str, addr: u32, line: u32) -> Result<(), AsmError> {
-        let key = ALbl::from_str(name).map_err(|_| AsmError::NameTooLong { line })?;
-        self.data.push((key, addr)).map_err(|_| AsmError::LabelOverflow)
+        let key = ALbl::parse_str(name).map_err(|_| AsmError::NameTooLong { line })?;
+        self.data
+            .push((key, addr))
+            .map_err(|_| AsmError::LabelOverflow)
     }
 
     fn get(&self, name: &str) -> Option<u32> {
@@ -187,7 +195,10 @@ fn split_mnem(body: &str) -> (&str, &str) {
     let idx = body
         .find(|c: char| c.is_ascii_whitespace() || c == ',')
         .unwrap_or(body.len());
-    (&body[..idx], body[idx..].trim_start_matches([' ', '\t', ',']))
+    (
+        &body[..idx],
+        body[idx..].trim_start_matches([' ', '\t', ',']),
+    )
 }
 
 fn is_ident(s: &str) -> bool {
@@ -338,7 +349,10 @@ struct Args<'a> {
 }
 
 fn split_args(ops: &str) -> Args<'_> {
-    let mut out = Args { slots: [None; 4], count: 0 };
+    let mut out = Args {
+        slots: [None; 4],
+        count: 0,
+    };
     if ops.trim().is_empty() {
         return out;
     }
@@ -447,7 +461,7 @@ fn emit_ai_struct(
     let (name, arity) = split_slash(raw).ok_or(AsmError::BadOperand { line })?;
     let aid = atoms.get(name).ok_or(AsmError::UndeclaredAtom { line })?;
     push_cell(cells, (opc << 16) | ((r1 as u32) << 8) | (arity as u32))?;
-    push_cell(cells, TAG_ATOM * TAG_MULT | aid)
+    push_cell(cells, (TAG_ATOM * TAG_MULT) | aid)
 }
 
 fn emit_two_reg(
@@ -468,12 +482,7 @@ fn emit_two_reg(
     push_cell(cells, (opc << 16) | ((r1 as u32) << 8) | (r2 as u32))
 }
 
-fn emit_alloc(
-    opc: u32,
-    args: &Args<'_>,
-    line: u32,
-    cells: &mut Cells,
-) -> Result<(), AsmError> {
+fn emit_alloc(opc: u32, args: &Args<'_>, line: u32, cells: &mut Cells) -> Result<(), AsmError> {
     if args.count != 1 {
         return Err(AsmError::BadArity { line });
     }
@@ -487,12 +496,7 @@ fn emit_alloc(
     push_cell(cells, (opc << 16) | (n << 8))
 }
 
-fn emit_reg1(
-    opc: u32,
-    args: &Args<'_>,
-    line: u32,
-    cells: &mut Cells,
-) -> Result<(), AsmError> {
+fn emit_reg1(opc: u32, args: &Args<'_>, line: u32, cells: &mut Cells) -> Result<(), AsmError> {
     if args.count != 1 {
         return Err(AsmError::BadArity { line });
     }
@@ -525,12 +529,12 @@ fn parse_reg(tok: &str, line: u32) -> Result<(u8, bool), AsmError> {
 fn parse_const(tok: &str, atoms: &AtomTab, line: u32) -> Result<u32, AsmError> {
     if let Some(inner) = strip_call(tok, "atom") {
         let aid = atoms.get(inner).ok_or(AsmError::UndeclaredAtom { line })?;
-        return Ok(TAG_ATOM * TAG_MULT | aid);
+        return Ok((TAG_ATOM * TAG_MULT) | aid);
     }
     if let Some(inner) = strip_call(tok, "int") {
         let n: i32 = inner.parse().map_err(|_| AsmError::BadOperand { line })?;
         let masked = (n as u32) & IMM_MASK;
-        return Ok(TAG_INT * TAG_MULT | masked);
+        return Ok((TAG_INT * TAG_MULT) | masked);
     }
     Err(AsmError::BadOperand { line })
 }

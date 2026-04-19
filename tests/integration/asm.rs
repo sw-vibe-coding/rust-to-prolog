@@ -14,7 +14,11 @@ fn ancestor_asm_byte_matches_lam_asm_py() {
     let mut actual = Vec::with_capacity(ANCESTOR_BIN.len());
     write_flat(&cells, &mut actual).expect("write flat ok");
     if actual != ANCESTOR_BIN {
-        eprintln!("expected {} bytes, got {} bytes", ANCESTOR_BIN.len(), actual.len());
+        eprintln!(
+            "expected {} bytes, got {} bytes",
+            ANCESTOR_BIN.len(),
+            actual.len()
+        );
         panic!("ancestor.bin drifted from lam_asm.py output");
     }
 }

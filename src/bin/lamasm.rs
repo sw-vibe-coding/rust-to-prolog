@@ -49,8 +49,8 @@ fn main() -> Result<()> {
 
     match (cli.format, &cli.output) {
         (Format::Flat, Some(path)) => {
-            let mut f = fs::File::create(path)
-                .with_context(|| format!("creating {}", path.display()))?;
+            let mut f =
+                fs::File::create(path).with_context(|| format!("creating {}", path.display()))?;
             write_flat(&cells, &mut f).context("writing flat binary")?;
             f.flush().context("flushing output")?;
         }

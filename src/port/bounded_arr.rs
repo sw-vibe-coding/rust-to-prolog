@@ -13,7 +13,10 @@ pub struct BoundedArr<T: Copy, const N: usize> {
 
 impl<T: Copy, const N: usize> BoundedArr<T, N> {
     pub const fn new() -> Self {
-        Self { data: [None; N], len: 0 }
+        Self {
+            data: [None; N],
+            len: 0,
+        }
     }
 
     pub fn push(&mut self, v: T) -> Result<(), PortError> {

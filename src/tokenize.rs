@@ -72,7 +72,10 @@ impl<'a> Cursor<'a> {
 }
 
 pub fn tokenize(src: &str) -> Result<BoundedArr<Token, MAX_TOKENS>, TokenizeError> {
-    let mut cur = Cursor { bytes: src.as_bytes(), pos: 0 };
+    let mut cur = Cursor {
+        bytes: src.as_bytes(),
+        pos: 0,
+    };
     let mut out: BoundedArr<Token, MAX_TOKENS> = BoundedArr::new();
     loop {
         skip_ws_and_comments(&mut cur)?;
@@ -154,7 +157,10 @@ fn next_token(cur: &mut Cursor) -> Result<Token, TokenizeError> {
     if c.is_ascii_uppercase() || c == b'_' {
         return scan_var(cur);
     }
-    Err(TokenizeError::InvalidChar { ch: c as char, pos: start })
+    Err(TokenizeError::InvalidChar {
+        ch: c as char,
+        pos: start,
+    })
 }
 
 fn punct_token(c: u8) -> Option<Token> {
@@ -192,7 +198,7 @@ fn scan_atom(cur: &mut Cursor) -> Result<Token, TokenizeError> {
     let start = cur.pos;
     let bytes = scan_ident_bytes(cur);
     let s = core::str::from_utf8(bytes).expect("ascii ident is valid utf8");
-    let name = BoundedStr::<ATOM_CAP>::from_str(s)
+    let name = BoundedStr::<ATOM_CAP>::parse_str(s)
         .map_err(|_| TokenizeError::IdentTooLong { pos: start })?;
     Ok(Token::Atom(name))
 }
@@ -201,7 +207,7 @@ fn scan_var(cur: &mut Cursor) -> Result<Token, TokenizeError> {
     let start = cur.pos;
     let bytes = scan_ident_bytes(cur);
     let s = core::str::from_utf8(bytes).expect("ascii ident is valid utf8");
-    let name = BoundedStr::<ATOM_CAP>::from_str(s)
+    let name = BoundedStr::<ATOM_CAP>::parse_str(s)
         .map_err(|_| TokenizeError::IdentTooLong { pos: start })?;
     Ok(Token::Var(name))
 }
@@ -222,8 +228,7 @@ fn scan_int(cur: &mut Cursor) -> Result<Token, TokenizeError> {
     if cur.pos == digits_start {
         return Err(TokenizeError::BadInt { pos: start });
     }
-    let s = core::str::from_utf8(&cur.bytes[start..cur.pos])
-        .expect("ascii digits are valid utf8");
+    let s = core::str::from_utf8(&cur.bytes[start..cur.pos]).expect("ascii digits are valid utf8");
     s.parse::<i32>()
         .map(Token::Int)
         .map_err(|_| TokenizeError::IntOverflow { pos: start })
@@ -234,7 +239,7 @@ mod tests {
     use super::*;
 
     fn bs(s: &str) -> BoundedStr<ATOM_CAP> {
-        BoundedStr::<ATOM_CAP>::from_str(s).expect("test name fits")
+        BoundedStr::<ATOM_CAP>::parse_str(s).expect("test name fits")
     }
 
     fn tok_vec(src: &str) -> Vec<Token> {
@@ -276,9 +281,13 @@ mod tests {
         assert_eq!(
             v,
             vec![
-                Token::LParen, Token::RParen,
-                Token::LBracket, Token::RBracket,
-                Token::Comma, Token::Dot, Token::Pipe,
+                Token::LParen,
+                Token::RParen,
+                Token::LBracket,
+                Token::RBracket,
+                Token::Comma,
+                Token::Dot,
+                Token::Pipe,
                 Token::Eof,
             ]
         );
@@ -289,7 +298,13 @@ mod tests {
         let v = tok_vec(":- ?- ! \\+");
         assert_eq!(
             v,
-            vec![Token::Neck, Token::Query, Token::Cut, Token::Not, Token::Eof]
+            vec![
+                Token::Neck,
+                Token::Query,
+                Token::Cut,
+                Token::Not,
+                Token::Eof
+            ]
         );
     }
 
@@ -355,7 +370,10 @@ mod tests {
     #[test]
     fn error_unterminated_block_comment() {
         let err = tokenize("foo /* never closed").unwrap_err();
-        assert!(matches!(err, TokenizeError::UnterminatedBlockComment { .. }));
+        assert!(matches!(
+            err,
+            TokenizeError::UnterminatedBlockComment { .. }
+        ));
     }
 
     #[test]

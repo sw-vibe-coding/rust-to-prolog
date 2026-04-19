@@ -35,7 +35,10 @@ pub enum Term {
     Atom(AtomId),
     Var(VarSlot),
     Int(i32),
-    Struct { functor: AtomId, args: BoundedArr<TermIdx, MAX_ARGS> },
+    Struct {
+        functor: AtomId,
+        args: BoundedArr<TermIdx, MAX_ARGS>,
+    },
     Nil,
 }
 
@@ -53,11 +56,13 @@ pub struct AtomTable {
 
 impl AtomTable {
     pub const fn new() -> Self {
-        Self { names: BoundedArr::new() }
+        Self {
+            names: BoundedArr::new(),
+        }
     }
 
     pub fn intern(&mut self, s: &str) -> Result<AtomId, ParseError> {
-        let key = BoundedStr::<NAME_CAP>::from_str(s).map_err(|_| ParseError::AtomOverflow)?;
+        let key = BoundedStr::<NAME_CAP>::parse_str(s).map_err(|_| ParseError::AtomOverflow)?;
         for i in 0..self.names.len() {
             if self.names.get(i).map(|n| *n == key).unwrap_or(false) {
                 return Ok(i as AtomId);
@@ -104,11 +109,13 @@ pub struct VarTable {
 
 impl VarTable {
     pub const fn new() -> Self {
-        Self { names: BoundedArr::new() }
+        Self {
+            names: BoundedArr::new(),
+        }
     }
 
     pub fn slot(&mut self, s: &str) -> Result<VarSlot, ParseError> {
-        let key = BoundedStr::<NAME_CAP>::from_str(s).map_err(|_| ParseError::VarOverflow)?;
+        let key = BoundedStr::<NAME_CAP>::parse_str(s).map_err(|_| ParseError::VarOverflow)?;
         for i in 0..self.names.len() {
             if self.names.get(i).map(|n| *n == key).unwrap_or(false) {
                 return Ok(i as VarSlot);
@@ -232,7 +239,9 @@ pub fn parse(
     let mut clauses: BoundedArr<Clause, MAX_CLAUSES> = BoundedArr::new();
     while !p.at_end() {
         let clause = parse_clause(&mut p, atoms)?;
-        clauses.push(clause).map_err(|_| ParseError::TooManyClauses)?;
+        clauses
+            .push(clause)
+            .map_err(|_| ParseError::TooManyClauses)?;
     }
     Ok(clauses)
 }
@@ -265,10 +274,17 @@ fn parse_clause(p: &mut Parser, atoms: &mut AtomTable) -> Result<Clause, ParseEr
     Ok(clause)
 }
 
-fn parse_body(p: &mut Parser, atoms: &mut AtomTable, clause: &mut Clause) -> Result<(), ParseError> {
+fn parse_body(
+    p: &mut Parser,
+    atoms: &mut AtomTable,
+    clause: &mut Clause,
+) -> Result<(), ParseError> {
     loop {
         let goal = parse_goal_expr(p, atoms, &mut clause.subterms, &mut clause.vars)?;
-        clause.body.push(goal).map_err(|_| ParseError::TooManyGoals)?;
+        clause
+            .body
+            .push(goal)
+            .map_err(|_| ParseError::TooManyGoals)?;
         if matches!(p.peek(), Some(Token::Comma)) {
             p.bump();
             continue;
@@ -483,15 +499,15 @@ fn parse_list(
         let mut args: BoundedArr<TermIdx, MAX_ARGS> = BoundedArr::new();
         args.push(h_idx).map_err(|_| ParseError::TooManyArgs)?;
         args.push(t_idx).map_err(|_| ParseError::TooManyArgs)?;
-        current = Term::Struct { functor: dot_id, args };
+        current = Term::Struct {
+            functor: dot_id,
+            args,
+        };
     }
     Ok(current)
 }
 
-fn push_sub(
-    subs: &mut BoundedArr<Term, MAX_SUBTERMS>,
-    t: Term,
-) -> Result<TermIdx, ParseError> {
+fn push_sub(subs: &mut BoundedArr<Term, MAX_SUBTERMS>, t: Term) -> Result<TermIdx, ParseError> {
     let idx = subs.len();
     if idx >= u8::MAX as usize {
         return Err(ParseError::SubtermOverflow);
@@ -525,11 +541,11 @@ mod tests {
     }
 
     fn a(s: &str) -> Token {
-        Token::Atom(BoundedStr::<NAME_CAP>::from_str(s).expect("atom name fits"))
+        Token::Atom(BoundedStr::<NAME_CAP>::parse_str(s).expect("atom name fits"))
     }
 
     fn v(s: &str) -> Token {
-        Token::Var(BoundedStr::<NAME_CAP>::from_str(s).expect("var name fits"))
+        Token::Var(BoundedStr::<NAME_CAP>::parse_str(s).expect("var name fits"))
     }
 
     fn name_of(atoms: &AtomTable, id: AtomId) -> &str {
@@ -540,8 +556,13 @@ mod tests {
     fn parse_single_fact() {
         // parent(bob, ann).
         let toks = tstream(&[
-            a("parent"), Token::LParen, a("bob"), Token::Comma, a("ann"),
-            Token::RParen, Token::Dot,
+            a("parent"),
+            Token::LParen,
+            a("bob"),
+            Token::Comma,
+            a("ann"),
+            Token::RParen,
+            Token::Dot,
         ]);
         let mut atoms = AtomTable::new();
         let clauses = parse(&toks, &mut atoms).expect("parse ok");
@@ -561,9 +582,19 @@ mod tests {
     fn parse_rule_with_single_body_goal() {
         // ancestor(X, Y) :- parent(X, Y).
         let toks = tstream(&[
-            a("ancestor"), Token::LParen, v("X"), Token::Comma, v("Y"), Token::RParen,
+            a("ancestor"),
+            Token::LParen,
+            v("X"),
+            Token::Comma,
+            v("Y"),
+            Token::RParen,
             Token::Neck,
-            a("parent"), Token::LParen, v("X"), Token::Comma, v("Y"), Token::RParen,
+            a("parent"),
+            Token::LParen,
+            v("X"),
+            Token::Comma,
+            v("Y"),
+            Token::RParen,
             Token::Dot,
         ]);
         let mut atoms = AtomTable::new();
@@ -595,8 +626,13 @@ mod tests {
         // ?- ancestor(bob, liz).
         let toks = tstream(&[
             Token::Query,
-            a("ancestor"), Token::LParen, a("bob"), Token::Comma, a("liz"),
-            Token::RParen, Token::Dot,
+            a("ancestor"),
+            Token::LParen,
+            a("bob"),
+            Token::Comma,
+            a("liz"),
+            Token::RParen,
+            Token::Dot,
         ]);
         let mut atoms = AtomTable::new();
         let clauses = parse(&toks, &mut atoms).expect("parse ok");
@@ -616,27 +652,67 @@ mod tests {
         // ?- ancestor(bob, liz).
         let toks = tstream(&[
             // parent(bob, ann).
-            a("parent"), Token::LParen, a("bob"), Token::Comma, a("ann"),
-            Token::RParen, Token::Dot,
+            a("parent"),
+            Token::LParen,
+            a("bob"),
+            Token::Comma,
+            a("ann"),
+            Token::RParen,
+            Token::Dot,
             // parent(ann, liz).
-            a("parent"), Token::LParen, a("ann"), Token::Comma, a("liz"),
-            Token::RParen, Token::Dot,
+            a("parent"),
+            Token::LParen,
+            a("ann"),
+            Token::Comma,
+            a("liz"),
+            Token::RParen,
+            Token::Dot,
             // ancestor(X, Y) :- parent(X, Y).
-            a("ancestor"), Token::LParen, v("X"), Token::Comma, v("Y"), Token::RParen,
+            a("ancestor"),
+            Token::LParen,
+            v("X"),
+            Token::Comma,
+            v("Y"),
+            Token::RParen,
             Token::Neck,
-            a("parent"), Token::LParen, v("X"), Token::Comma, v("Y"), Token::RParen,
+            a("parent"),
+            Token::LParen,
+            v("X"),
+            Token::Comma,
+            v("Y"),
+            Token::RParen,
             Token::Dot,
             // ancestor(X, Y) :- parent(X, Z), ancestor(Z, Y).
-            a("ancestor"), Token::LParen, v("X"), Token::Comma, v("Y"), Token::RParen,
-            Token::Neck,
-            a("parent"), Token::LParen, v("X"), Token::Comma, v("Z"), Token::RParen,
+            a("ancestor"),
+            Token::LParen,
+            v("X"),
             Token::Comma,
-            a("ancestor"), Token::LParen, v("Z"), Token::Comma, v("Y"), Token::RParen,
+            v("Y"),
+            Token::RParen,
+            Token::Neck,
+            a("parent"),
+            Token::LParen,
+            v("X"),
+            Token::Comma,
+            v("Z"),
+            Token::RParen,
+            Token::Comma,
+            a("ancestor"),
+            Token::LParen,
+            v("Z"),
+            Token::Comma,
+            v("Y"),
+            Token::RParen,
             Token::Dot,
             // ?- ancestor(bob, liz).
             Token::Query,
-            a("ancestor"), Token::LParen, a("bob"), Token::Comma, a("liz"),
-            Token::RParen, Token::Dot,
+            a("ancestor"),
+            Token::LParen,
+            a("bob"),
+            Token::Comma,
+            a("liz"),
+            Token::RParen,
+            Token::Dot,
         ]);
         let mut atoms = AtomTable::new();
         let clauses = parse(&toks, &mut atoms).expect("parse ok");
@@ -645,8 +721,11 @@ mod tests {
         assert_eq!(
             kinds,
             vec![
-                ClauseKind::Fact, ClauseKind::Fact, ClauseKind::Rule,
-                ClauseKind::Rule, ClauseKind::Query,
+                ClauseKind::Fact,
+                ClauseKind::Fact,
+                ClauseKind::Rule,
+                ClauseKind::Rule,
+                ClauseKind::Query,
             ]
         );
         let heads: Vec<&str> = clauses
@@ -666,11 +745,17 @@ mod tests {
     fn list_sugar_three_elements() {
         // foo([a, b, c]).
         let toks = tstream(&[
-            a("foo"), Token::LParen,
+            a("foo"),
+            Token::LParen,
             Token::LBracket,
-            a("a"), Token::Comma, a("b"), Token::Comma, a("c"),
+            a("a"),
+            Token::Comma,
+            a("b"),
+            Token::Comma,
+            a("c"),
             Token::RBracket,
-            Token::RParen, Token::Dot,
+            Token::RParen,
+            Token::Dot,
         ]);
         let mut atoms = AtomTable::new();
         let clauses = parse(&toks, &mut atoms).expect("parse ok");
@@ -711,9 +796,15 @@ mod tests {
     fn list_with_tail_var() {
         // foo([H|T]).
         let toks = tstream(&[
-            a("foo"), Token::LParen,
-            Token::LBracket, v("H"), Token::Pipe, v("T"), Token::RBracket,
-            Token::RParen, Token::Dot,
+            a("foo"),
+            Token::LParen,
+            Token::LBracket,
+            v("H"),
+            Token::Pipe,
+            v("T"),
+            Token::RBracket,
+            Token::RParen,
+            Token::Dot,
         ]);
         let mut atoms = AtomTable::new();
         let clauses = parse(&toks, &mut atoms).expect("parse ok");
@@ -740,9 +831,12 @@ mod tests {
     fn empty_list_is_nil() {
         // foo([]).
         let toks = tstream(&[
-            a("foo"), Token::LParen,
-            Token::LBracket, Token::RBracket,
-            Token::RParen, Token::Dot,
+            a("foo"),
+            Token::LParen,
+            Token::LBracket,
+            Token::RBracket,
+            Token::RParen,
+            Token::Dot,
         ]);
         let mut atoms = AtomTable::new();
         let clauses = parse(&toks, &mut atoms).expect("parse ok");
@@ -759,8 +853,11 @@ mod tests {
     fn cut_in_body_becomes_atom() {
         // p :- !, q.
         let toks = tstream(&[
-            a("p"), Token::Neck,
-            Token::Cut, Token::Comma, a("q"),
+            a("p"),
+            Token::Neck,
+            Token::Cut,
+            Token::Comma,
+            a("q"),
             Token::Dot,
         ]);
         let mut atoms = AtomTable::new();
@@ -776,11 +873,7 @@ mod tests {
     #[test]
     fn not_goal_wraps_in_neg() {
         // p :- \+ q.
-        let toks = tstream(&[
-            a("p"), Token::Neck,
-            Token::Not, a("q"),
-            Token::Dot,
-        ]);
+        let toks = tstream(&[a("p"), Token::Neck, Token::Not, a("q"), Token::Dot]);
         let mut atoms = AtomTable::new();
         let clauses = parse(&toks, &mut atoms).expect("parse ok");
         let c = clauses.get(0).unwrap();
@@ -803,7 +896,11 @@ mod tests {
     fn int_literal() {
         // foo(42).
         let toks = tstream(&[
-            a("foo"), Token::LParen, Token::Int(42), Token::RParen, Token::Dot,
+            a("foo"),
+            Token::LParen,
+            Token::Int(42),
+            Token::RParen,
+            Token::Dot,
         ]);
         let mut atoms = AtomTable::new();
         let clauses = parse(&toks, &mut atoms).expect("parse ok");
@@ -820,10 +917,20 @@ mod tests {
     fn atom_interning_reuses_ids() {
         // parent(bob, ann). parent(ann, liz).
         let toks = tstream(&[
-            a("parent"), Token::LParen, a("bob"), Token::Comma, a("ann"),
-            Token::RParen, Token::Dot,
-            a("parent"), Token::LParen, a("ann"), Token::Comma, a("liz"),
-            Token::RParen, Token::Dot,
+            a("parent"),
+            Token::LParen,
+            a("bob"),
+            Token::Comma,
+            a("ann"),
+            Token::RParen,
+            Token::Dot,
+            a("parent"),
+            Token::LParen,
+            a("ann"),
+            Token::Comma,
+            a("liz"),
+            Token::RParen,
+            Token::Dot,
         ]);
         let mut atoms = AtomTable::new();
         let _ = parse(&toks, &mut atoms).expect("parse ok");
@@ -835,19 +942,30 @@ mod tests {
     fn error_missing_dot() {
         // parent(bob, ann)
         let toks = tstream(&[
-            a("parent"), Token::LParen, a("bob"), Token::Comma, a("ann"),
+            a("parent"),
+            Token::LParen,
+            a("bob"),
+            Token::Comma,
+            a("ann"),
             Token::RParen,
         ]);
         let mut atoms = AtomTable::new();
         let err = parse(&toks, &mut atoms).unwrap_err();
-        assert!(matches!(err, ParseError::MissingDot(_) | ParseError::UnexpectedEof(_)));
+        assert!(matches!(
+            err,
+            ParseError::MissingDot(_) | ParseError::UnexpectedEof(_)
+        ));
     }
 
     #[test]
     fn error_mismatched_paren() {
         // parent(bob, ann.
         let toks = tstream(&[
-            a("parent"), Token::LParen, a("bob"), Token::Comma, a("ann"),
+            a("parent"),
+            Token::LParen,
+            a("bob"),
+            Token::Comma,
+            a("ann"),
             Token::Dot,
         ]);
         let mut atoms = AtomTable::new();
@@ -859,8 +977,12 @@ mod tests {
     fn error_mismatched_bracket() {
         // foo([a, b.
         let toks = tstream(&[
-            a("foo"), Token::LParen,
-            Token::LBracket, a("a"), Token::Comma, a("b"),
+            a("foo"),
+            Token::LParen,
+            Token::LBracket,
+            a("a"),
+            Token::Comma,
+            a("b"),
             Token::Dot,
         ]);
         let mut atoms = AtomTable::new();
@@ -874,9 +996,7 @@ mod tests {
     #[test]
     fn error_bad_operator() {
         // :- p.   (starts with a bare operator, no head)
-        let toks = tstream(&[
-            Token::Neck, a("p"), Token::Dot,
-        ]);
+        let toks = tstream(&[Token::Neck, a("p"), Token::Dot]);
         let mut atoms = AtomTable::new();
         let err = parse(&toks, &mut atoms).unwrap_err();
         assert!(matches!(err, ParseError::UnexpectedToken(_)));
@@ -886,7 +1006,11 @@ mod tests {
     fn error_cut_as_term() {
         // foo(!).   cut cannot stand as a term argument
         let toks = tstream(&[
-            a("foo"), Token::LParen, Token::Cut, Token::RParen, Token::Dot,
+            a("foo"),
+            Token::LParen,
+            Token::Cut,
+            Token::RParen,
+            Token::Dot,
         ]);
         let mut atoms = AtomTable::new();
         let err = parse(&toks, &mut atoms).unwrap_err();
@@ -896,9 +1020,7 @@ mod tests {
     #[test]
     fn error_empty_struct_args() {
         // foo().
-        let toks = tstream(&[
-            a("foo"), Token::LParen, Token::RParen, Token::Dot,
-        ]);
+        let toks = tstream(&[a("foo"), Token::LParen, Token::RParen, Token::Dot]);
         let mut atoms = AtomTable::new();
         let err = parse(&toks, &mut atoms).unwrap_err();
         assert!(matches!(err, ParseError::EmptyArgs(_)));

@@ -1,9 +1,14 @@
 //! `BoundedStr<N>`: fixed-capacity UTF-8 string, `Copy`, stack-only.
 //!
 //! Mirrors a SNOBOL4 fixed-width string slot. Constructor validates
-//! capacity; `as_str` returns the live prefix.
+//! capacity; `as_str` returns the live prefix. Parsing from `&str` is
+//! exposed as the inherent method `parse_str` (kept with a non-
+//! clashing name to sidestep the `std::str::FromStr` trait-method-
+//! name shadowing lint) — and `FromStr` is also implemented in terms
+//! of it, so `"hello".parse::<BoundedStr<16>>()` works too.
 
 use super::error::PortError;
+use core::str::FromStr;
 
 #[derive(Clone, Copy, Eq)]
 pub struct BoundedStr<const N: usize> {
@@ -13,10 +18,13 @@ pub struct BoundedStr<const N: usize> {
 
 impl<const N: usize> BoundedStr<N> {
     pub const fn new() -> Self {
-        Self { buf: [0u8; N], len: 0 }
+        Self {
+            buf: [0u8; N],
+            len: 0,
+        }
     }
 
-    pub fn from_str(s: &str) -> Result<Self, PortError> {
+    pub fn parse_str(s: &str) -> Result<Self, PortError> {
         let bytes = s.as_bytes();
         if bytes.len() > N || bytes.len() > u8::MAX as usize {
             return Err(PortError::Overflow);
@@ -27,7 +35,10 @@ impl<const N: usize> BoundedStr<N> {
             buf[i] = bytes[i];
             i += 1;
         }
-        Ok(Self { buf, len: bytes.len() as u8 })
+        Ok(Self {
+            buf,
+            len: bytes.len() as u8,
+        })
     }
 
     pub fn as_str(&self) -> &str {
@@ -41,6 +52,14 @@ impl<const N: usize> BoundedStr<N> {
 
     pub fn is_empty(&self) -> bool {
         self.len == 0
+    }
+}
+
+impl<const N: usize> FromStr for BoundedStr<N> {
+    type Err = PortError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse_str(s)
     }
 }
 
@@ -68,7 +87,7 @@ mod tests {
 
     #[test]
     fn roundtrip_basic() {
-        let s = BoundedStr::<16>::from_str("hello").unwrap();
+        let s = BoundedStr::<16>::parse_str("hello").unwrap();
         assert_eq!(s.as_str(), "hello");
         assert_eq!(s.len(), 5);
         assert!(!s.is_empty());
@@ -85,29 +104,29 @@ mod tests {
 
     #[test]
     fn overflow_returns_err() {
-        let r = BoundedStr::<4>::from_str("hello");
+        let r = BoundedStr::<4>::parse_str("hello");
         assert_eq!(r, Err(PortError::Overflow));
     }
 
     #[test]
     fn exact_fit_at_capacity() {
-        let s = BoundedStr::<5>::from_str("hello").unwrap();
+        let s = BoundedStr::<5>::parse_str("hello").unwrap();
         assert_eq!(s.as_str(), "hello");
         assert_eq!(s.len(), 5);
     }
 
     #[test]
     fn equality_by_content() {
-        let a = BoundedStr::<16>::from_str("x").unwrap();
-        let b = BoundedStr::<16>::from_str("x").unwrap();
-        let c = BoundedStr::<16>::from_str("y").unwrap();
+        let a = BoundedStr::<16>::parse_str("x").unwrap();
+        let b = BoundedStr::<16>::parse_str("x").unwrap();
+        let c = BoundedStr::<16>::parse_str("y").unwrap();
         assert_eq!(a, b);
         assert_ne!(a, c);
     }
 
     #[test]
     fn value_is_copy() {
-        let s = BoundedStr::<4>::from_str("ab").unwrap();
+        let s = BoundedStr::<4>::parse_str("ab").unwrap();
         let t = s;
         let u = s;
         assert_eq!(t.as_str(), "ab");

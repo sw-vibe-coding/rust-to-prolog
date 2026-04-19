@@ -16,11 +16,13 @@ pub struct Vmap<const N: usize> {
 
 impl<const N: usize> Vmap<N> {
     pub const fn new() -> Self {
-        Self { ents: BoundedArr::new() }
+        Self {
+            ents: BoundedArr::new(),
+        }
     }
 
     pub fn insert(&mut self, k: &str, v: i32) -> Result<(), PortError> {
-        let key = VKey::from_str(k)?;
+        let key = VKey::parse_str(k)?;
         for i in 0..self.ents.len() {
             let entry = self.ents.get_mut(i).expect("vmap: len invariant");
             if entry.0 == key {
@@ -32,7 +34,7 @@ impl<const N: usize> Vmap<N> {
     }
 
     pub fn get(&self, k: &str) -> Option<i32> {
-        let key = VKey::from_str(k).ok()?;
+        let key = VKey::parse_str(k).ok()?;
         for entry in self.ents.iter() {
             if entry.0 == key {
                 return Some(entry.1);
