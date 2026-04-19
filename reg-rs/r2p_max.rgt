@@ -1,0 +1,4 @@
+command = "./target/debug/prologc examples/max.pl 2>&1"
+timeout = 15
+exit_code = 0
+desc = "rust-to-prolog: max.pl — cut commitment"

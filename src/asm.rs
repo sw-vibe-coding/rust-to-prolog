@@ -618,8 +618,8 @@ mod tests {
         let src = ".atom 1 bob\n    PUT_CONST A0, atom(bob)\n";
         let c = cells_of(src);
         assert_eq!(c.len(), 2);
-        assert_eq!(cell(&c, 0), (12 << 16) | (0 << 8));
-        assert_eq!(cell(&c, 1), TAG_ATOM * TAG_MULT | 1);
+        assert_eq!(cell(&c, 0), 12 << 16);
+        assert_eq!(cell(&c, 1), (TAG_ATOM * TAG_MULT) | 1);
     }
 
     #[test]
@@ -628,7 +628,7 @@ mod tests {
         let c = cells_of(src);
         assert_eq!(c.len(), 2);
         assert_eq!(cell(&c, 0), (18 << 16) | (1 << 8));
-        assert_eq!(cell(&c, 1), TAG_ATOM * TAG_MULT | 2);
+        assert_eq!(cell(&c, 1), (TAG_ATOM * TAG_MULT) | 2);
     }
 
     #[test]
@@ -637,14 +637,14 @@ mod tests {
         let c = cells_of(src);
         assert_eq!(c.len(), 2);
         assert_eq!(cell(&c, 0), (12 << 16) | (2 << 8));
-        assert_eq!(cell(&c, 1), TAG_INT * TAG_MULT | 42);
+        assert_eq!(cell(&c, 1), (TAG_INT * TAG_MULT) | 42);
     }
 
     #[test]
     fn put_const_negative_int_masks_to_21_bits() {
         let src = "    PUT_CONST A0, int(-1)\n";
         let c = cells_of(src);
-        assert_eq!(cell(&c, 1), TAG_INT * TAG_MULT | IMM_MASK);
+        assert_eq!(cell(&c, 1), (TAG_INT * TAG_MULT) | IMM_MASK);
     }
 
     #[test]
@@ -687,7 +687,7 @@ mod tests {
     fn get_y_var_encodes_y_then_a() {
         let src = "    GET_Y_VAR Y0, A1\n";
         let c = cells_of(src);
-        assert_eq!(cell(&c, 0), (20 << 16) | (0 << 8) | 1);
+        assert_eq!(cell(&c, 0), (20 << 16) | 1);
     }
 
     #[test]
@@ -701,7 +701,7 @@ mod tests {
     fn b_write_encodes_register() {
         let src = "    B_WRITE A0\n";
         let c = cells_of(src);
-        assert_eq!(cell(&c, 0), (32 << 16) | (0 << 8));
+        assert_eq!(cell(&c, 0), 32 << 16);
     }
 
     #[test]
@@ -718,8 +718,8 @@ mod tests {
         let src = ".atom 7 foo\n    GET_STRUCT A0, foo/2\n";
         let c = cells_of(src);
         assert_eq!(c.len(), 2);
-        assert_eq!(cell(&c, 0), (19 << 16) | (0 << 8) | 2);
-        assert_eq!(cell(&c, 1), TAG_ATOM * TAG_MULT | 7);
+        assert_eq!(cell(&c, 0), (19 << 16) | 2);
+        assert_eq!(cell(&c, 1), (TAG_ATOM * TAG_MULT) | 7);
     }
 
     #[test]

@@ -41,10 +41,20 @@ Each is in `examples/` and has a corresponding integration test
 
 ```
 prologc examples/ancestor.pl
+# (no output; HALT)
 ```
 
-Used for the early byte-parity work: `tests/fixtures/ancestor.lam`
-and `.bin` are checked in and byte-matched against `lam_asm.py`.
+The file holds a yes/no query (`?- ancestor(bob, liz).`). Prolog
+convention is that a silent HALT means "proved"; there's no
+`write` in the query. Used for the early byte-parity work —
+`tests/fixtures/ancestor.lam` and `.bin` are checked in and
+byte-matched against `lam_asm.py`, so keeping the query minimal
+keeps the golden fixtures small.
+
+The web UI's "ancestor" demo uses a lightly-modified query —
+`?- ancestor(bob, liz), write(yes), nl.` — so the output pane
+shows `yes\n` instead of staying blank. Source is inlined in
+`web-ui/src/demos.rs`.
 
 ### 2. Color backtracking — `write/1`, `nl/0`, `fail/0`
 
@@ -96,17 +106,61 @@ subsequent `fail` can't retry the second clause because `!`
 removed its choice point. Without the cut the output would be
 `5\n3\n`.
 
+### 5a. `path/2` — graph reachability
+
+Two variants, both over the same four-edge DAG (a→b, b→c, a→d,
+d→c). Imported from user-paste examples during the demo build.
+
+```
+prologc examples/path.pl            # yes/no: is c reachable from a?
+# → yes
+#   -- HALT
+
+prologc examples/path_show.pl       # print each route, backtrack-driven
+# → a
+#   b
+#   c
+#   done        — first proof: a → b → c
+#   a
+#   d
+#   c
+#   done        — second proof: a → d → c
+#   -- FAIL (all solutions exhausted)
+```
+
+`path/2`'s recursive clause is structurally identical to
+`grandparent/2` — one non-tail CALL followed by a tail CALL, so
+the permanent-variable machinery (Y-regs + ALLOCATE/DEALLOCATE)
+is fully exercised. `show_path/2` prints each node via
+tail-recursive traversal and avoids collecting the route into a
+list (the natural list approach hits the UNIFY-stream permanent-
+var gap documented in [`limitations.md`](limitations.md)).
+
 ### 6. `ne/2` — negation-as-failure + `=/2`
 
+Two files, two outcomes:
+
 ```
-prologc examples/neq.pl
-# → -- FAIL
+prologc examples/neq.pl       # ne(red, red) — same atoms, fails
+# → -- FAIL (no output)
+#
+# Why: red = red unifies, so \+ X = Y fails, so ne fails, so
+# the conjunction fails before reaching write(ok). Status = FAIL
+# is the correct verdict; the empty output is a direct consequence.
+
+prologc examples/neq_ok.pl    # ne(red, blue) — distinct atoms, succeeds
+# → ok
+#   -- HALT
+#
+# Why: red = blue fails, so \+ X = Y succeeds, so ne succeeds,
+# so the conjunction reaches write(ok) and prints. Status = HALT.
 ```
 
-`ne(X, Y) :- \+ X = Y.` fails on `ne(red, red)` since the goals
-unify. For `ne(red, blue)` it would print `ok\n`. Note the `\+`
-compilation is correct only for goals `G` that leave at most one
-residual choice point (see `docs/limitations.md`).
+Both cases share the `ne(X, Y) :- \+ X = Y.` definition. They
+demonstrate that `\+` reports the expected verdict on simple
+unification goals. Note the `\+` compilation is correct only for
+goals `G` that leave at most one residual choice point (see
+[`limitations.md`](limitations.md)).
 
 ### 7. Liar puzzle — the demo target
 
@@ -175,3 +229,27 @@ scripts/run-tests.sh --full     # also runs #[ignore] tests once
                                  # step 020-integration-ancestor
                                  # unblocks (real-VM smoke test)
 ```
+
+## CLI regression suite (reg-rs)
+
+The integration tests above exercise the pipeline via the Rust API. A
+complementary suite under `reg-rs/` exercises the **`prologc` binary**
+end-to-end — one `.rgt` + `.out` pair per demo captures stdout+stderr
+as a byte-exact baseline. This catches regressions in CLI-only layers
+(argv parsing, I/O buffering, exit codes) that the in-process tests
+miss.
+
+```
+scripts/run-regression.sh        # run all 12 demos in parallel
+scripts/run-regression.sh -vv    # full diffs on any failure
+```
+
+Rebaseline after an intentional output change:
+
+```
+REG_RS_DATA_DIR="$(pwd)/reg-rs" reg-rs rebase -p r2p_<demo>
+```
+
+Requires [`reg-rs`](https://github.com/softwarewrighter/reg-rs) on
+`PATH`. Baselines (`.rgt`, `.out`) are tracked in git; runtime SQLite
+state (`.tdb`, `.tdb.lock`) is ignored.

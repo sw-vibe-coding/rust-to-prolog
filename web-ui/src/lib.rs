@@ -174,11 +174,7 @@ impl Component for App {
                 <section class="panel about">
                     <p>
                         { "Full Rust pipeline (tokenize → parse → compile → emit → asm → refvm) \
-                           running in WASM. No COR24 emulator. Hit " }
-                        <kbd>{ "Cmd+Enter" }</kbd>
-                        { " (or " }
-                        <kbd>{ "Ctrl+Enter" }</kbd>
-                        { ") to run. See " }
+                           running in WASM. No COR24 emulator. See " }
                         <a href="https://github.com/sw-vibe-coding/rust-to-prolog/blob/main/docs/rationale.md" target="_blank">{ "rationale" }</a>
                         { " / " }
                         <a href="https://github.com/sw-vibe-coding/rust-to-prolog/blob/main/docs/demos.md" target="_blank">{ "demos" }</a>

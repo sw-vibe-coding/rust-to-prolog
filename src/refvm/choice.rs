@@ -109,20 +109,20 @@ mod tests {
     fn restore_brings_back_saved_argument_regs() {
         let mut stack: Vec<ChoicePt> = Vec::new();
         let mut regs = [0u32; 16];
-        for i in 0..8 {
-            regs[i] = make(TAG_ATOM, i as u32 + 1);
+        for (i, r) in regs.iter_mut().enumerate().take(8) {
+            *r = make(TAG_ATOM, i as u32 + 1);
         }
         let heap: Vec<u32> = Vec::new();
         let trail: Vec<u32> = Vec::new();
         push_choice(&mut stack, &regs, 0, 0, heap.len(), trail.len(), 0);
-        for i in 0..8 {
-            regs[i] = 0;
+        for r in regs.iter_mut().take(8) {
+            *r = 0;
         }
         let mut heap: Vec<u32> = Vec::new();
         let mut trail: Vec<u32> = Vec::new();
         restore_top(&stack, &mut regs, &mut heap, &mut trail, noop_env);
-        for i in 0..8 {
-            assert_eq!(regs[i], make(TAG_ATOM, i as u32 + 1));
+        for (i, r) in regs.iter().enumerate().take(8) {
+            assert_eq!(*r, make(TAG_ATOM, i as u32 + 1));
         }
     }
 

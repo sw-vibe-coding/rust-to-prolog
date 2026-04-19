@@ -12,16 +12,20 @@ pub struct Demo {
 
 pub static DEMOS: &[Demo] = &[
     Demo {
+        // Inline version — adds `write(yes), nl` to the query so the
+        // UI shows a visible confirmation. examples/ancestor.pl has
+        // the silent yes/no form for the byte-parity tests.
         name: "ancestor (recursion + pattern match)",
-        source: include_str!("../../examples/ancestor.pl"),
+        source: "parent(bob, ann).\n\
+parent(ann, liz).\n\
+ancestor(X, Y) :- parent(X, Y).\n\
+ancestor(X, Y) :- parent(X, Z), ancestor(Z, Y).\n\
+\n\
+?- ancestor(bob, liz), write(yes), nl.\n",
     },
     Demo {
         name: "append (list concatenation)",
-        source: "% Classical list append via structural recursion.\n\
-append([], L, L).\n\
-append([H|T], L, [H|R]) :- append(T, L, R).\n\
-\n\
-?- append([a, b], [c, d, e], X), write(X), nl.\n",
+        source: include_str!("../../examples/append.pl"),
     },
     Demo {
         name: "color (backtracking demo)",
@@ -29,18 +33,7 @@ append([H|T], L, [H|R]) :- append(T, L, R).\n\
     },
     Demo {
         name: "fib (Fibonacci with accumulator)",
-        source: "% Tail-recursive Fibonacci via a pair-accumulator.\n\
-% fib(N, A, B, R): A = fib(k), B = fib(k+1), iterate N times.\n\
-% Call with fib(N, 0, 1, R) to get R = fib(N).\n\
-\n\
-fib(0, A, _, A).\n\
-fib(N, A, B, R) :-\n    \
-N > 0,\n    \
-NewB is A + B,\n    \
-N1 is N - 1,\n    \
-fib(N1, B, NewB, R).\n\
-\n\
-?- fib(10, 0, 1, F), write(F), nl.\n",
+        source: include_str!("../../examples/fib.pl"),
     },
     Demo {
         name: "liar (Lion Lies on Tuesdays)",
@@ -55,8 +48,20 @@ fib(N1, B, NewB, R).\n\
         source: include_str!("../../examples/member.pl"),
     },
     Demo {
-        name: "neq (negation-as-failure)",
+        name: "neq (same atoms, fails)",
         source: include_str!("../../examples/neq.pl"),
+    },
+    Demo {
+        name: "neq (distinct atoms, succeeds)",
+        source: include_str!("../../examples/neq_ok.pl"),
+    },
+    Demo {
+        name: "path (reachability — yes/no)",
+        source: include_str!("../../examples/path.pl"),
+    },
+    Demo {
+        name: "path (print each reachable path)",
+        source: include_str!("../../examples/path_show.pl"),
     },
     Demo {
         name: "sum (tail-recursive arithmetic)",

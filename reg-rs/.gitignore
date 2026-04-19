@@ -1,0 +1,3 @@
+# Runtime state — baselines live in .rgt / .out, which ARE tracked.
+*.tdb
+*.tdb.lock

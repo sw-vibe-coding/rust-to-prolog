@@ -1,0 +1,4 @@
+command = "./target/debug/prologc examples/path.pl 2>&1"
+timeout = 15
+exit_code = 0
+desc = "rust-to-prolog: path.pl — graph reachability yes/no"

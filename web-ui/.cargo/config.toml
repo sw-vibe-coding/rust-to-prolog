@@ -1,0 +1,11 @@
+# Bump the WASM linear-memory stack from the 1 MiB default to 8 MiB.
+#
+# Why: the rust-to-prolog pipeline holds several large BoundedArr<T, N>
+# values concurrently (Clause arena at ~250 KB, Instr array at ~147 KB,
+# cells buffer at ~33 KB), all stack-allocated to preserve SNOBOL4 /
+# PL/SW port friendliness. On wasm32-unknown-unknown the default 1 MiB
+# stack overflows on the very first pipeline run, manifesting as a
+# page-level "memory access out of bounds" trap with no Rust panic.
+# Native builds have an 8 MB stack so this is WASM-specific.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=-zstack-size=8388608"]

@@ -73,7 +73,13 @@ in [`docs/porting-plan.md`](docs/porting-plan.md).
 ```
 cargo test                    # 119 lib + 36 integration tests
 scripts/run-tests.sh          # same, plus the port-audit gate
+scripts/run-regression.sh     # reg-rs CLI suite: 12 demos end-to-end
 ```
+
+The reg-rs suite captures stdout+stderr of `prologc examples/*.pl` as
+byte-exact baselines (`reg-rs/r2p_*.{rgt,out}`). It catches CLI-layer
+regressions — argv parsing, I/O buffering, exit codes — that the
+in-process integration tests miss. See [`docs/demos.md`](docs/demos.md).
 
 ## CI signals
 

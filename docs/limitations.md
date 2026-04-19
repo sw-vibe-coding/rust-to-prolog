@@ -131,6 +131,57 @@ upstream `vm_ctrl.plsw` — it clears the entire choice stack
 including `outer`'s backtracking points. Wrong for deeply-
 nested cut. Flat top-level cut works correctly.
 
+### Permanent vars in UNIFY streams
+
+```prolog
+% All of these fail at compile time with CompileError::StructArg:
+path(X, Y, [X, Y]) :- edge(X, Y).                 %% list pattern in head
+path(X, Y, Route) :- edge(X, Y), Route = [X, Y].  %% Route = [X, Y] in body
+
+%% and the canonical permutation program:
+perm([], []).
+perm(L, [H|T]) :- select(H, L, R), perm(R, T).
+select(X, [X|T], T).
+select(X, [H|T], [H|R]) :- select(X, T, R).
+?- perm([1,2,3], P).
+%%                                  %% perm_c2 head has [H|T] with
+%%                                  %% T permanent (chunks {head, select}
+%%                                  %% and {perm} overlap), and
+%%                                  %% emit_unify_var rejects Perm variants.
+```
+
+When the compiler emits a `GET_STRUCT`/`PUT_VAR` + `UNIFY_*`
+stream for a cons cell (or any struct), each element of the
+stream becomes an `UNIFY_VAR` / `UNIFY_VAL` against an X-reg. Our
+current `emit_unify_var` rejects variables classified as
+permanent (Y-reg) — classical WAM has dedicated
+`unify_y_variable` / `unify_y_value` opcodes for exactly this
+case, but the LAM opcode set omits them.
+
+Synthesising an equivalent via
+`UNIFY_VAR Xs; PUT_VAL Xs, Atmp; GET_Y_VAR Yj, Atmp` (first-occ)
+and `PUT_Y_VAL Yj, Atmp; GET_VAR Xs, Atmp; UNIFY_VAL Xs` (seen)
+was attempted and produced wrong output under backtracking —
+the three-instruction pattern interacts badly with the VM's
+choice-point state in ways I haven't fully traced. The right
+fix is probably an env-aware scratch register tracker in
+`RegMap`; tracked as future work.
+
+**Workaround**: restructure so the affected variables stay
+temporary. Two patterns work:
+
+- **Print-as-you-traverse**: `examples/path_show.pl` walks a
+  graph and prints each node via `write/1` rather than collecting
+  the route into a list.
+- **Ground atoms as list elements**: `examples/color.pl` and
+  `examples/member.pl` do this — the list elements are atoms,
+  and the vars are in A-registers at call time, never inside a
+  unify stream.
+
+The canonical Prolog `perm/2` + `select/3` pair cannot currently
+compile for this reason; until the fix lands it's the demo we
+*can't* ship.
+
 ### Nested struct arguments beyond list spines
 
 ```prolog

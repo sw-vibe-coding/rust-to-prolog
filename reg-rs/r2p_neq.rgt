@@ -1,0 +1,4 @@
+command = "./target/debug/prologc examples/neq.pl 2>&1"
+timeout = 15
+exit_code = 0
+desc = "rust-to-prolog: neq.pl — negation-as-failure (ne(red,red) fails)"
