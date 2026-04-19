@@ -1,6 +1,6 @@
 number = 17
 slug = "liar-puzzle"
-status = "pending"
+status = "completed"
 description = """
 Ship the demo: examples/liar.pl solves 'The Lion Lies on Tuesdays.'
 
@@ -8,5 +8,6 @@ Puzzle s..."""
 role = "validation"
 context_files = []
 created_at = "2026-04-16T13:09:29"
+completed_at = "2026-04-18T20:53:18"
 task_type = "end-to-end-demo"
-commits = []
+commits = ["5f64ce45cb39830492b872ec06e6e2f9f604af5f"]

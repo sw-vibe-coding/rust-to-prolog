@@ -1,0 +1,11 @@
+{
+  "task_type": "end-to-end-demo",
+  "state": {
+    "number": 17,
+    "step": "liar-puzzle"
+  },
+  "action": "cargo test green gate; analysed the puzzle semantics to check both formulations would give 'thursday' uniquely (lion/unicorn inconsistency constraint holds only on Thursday); traced the \\+-with-multi-clause-G bug to confirm my step-016 emit would fail here (G = lion_lies(Today) with 3 clauses leaves a dispatcher CP on success, so the first TRUST in the \\+ epilogue pops the wrong frame); chose positive-truth reformulation over implementing scoped cut since the prompt explicitly allowed it and scoped cut is a deeper redesign; hit NameTooLong at asm.rs ATOM_CAP=24 on first run, bumped to 48 to match LABEL_CAP; deferred real-VM integration (still blocked at step 020); no changes to compile or refvm — everything the liar puzzle needs was already in place from steps 012-016.",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-18T20:53:18"
+}

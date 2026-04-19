@@ -90,7 +90,13 @@ pub struct Vm {
     pub pc: usize,
     pub cp: usize,
     pub choice: Vec<choice::ChoicePt>,
+    /// Env frames. Grows monotonically during forward execution;
+    /// `DEALLOCATE` and choice-point restore only move `ep` rather
+    /// than popping, so frames protected by active choice points
+    /// aren't destroyed and come back into scope on backtrack.
     pub env: Vec<EnvFrame>,
+    /// Logical env-stack top. `env[ep - 1]` is the current frame.
+    pub ep: usize,
     pub atoms: Vec<String>,
     pub mode: UnifyMode,
     pub up: usize,
@@ -108,6 +114,7 @@ impl Vm {
             cp: 0,
             choice: Vec::new(),
             env: Vec::new(),
+            ep: 0,
             atoms: Vec::new(),
             mode: UnifyMode::Read,
             up: 0,

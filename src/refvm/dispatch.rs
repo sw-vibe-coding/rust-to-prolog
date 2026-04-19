@@ -130,7 +130,7 @@ fn exec_try(vm: &mut Vm) -> Result<Step, RunError> {
         vm.cp,
         vm.heap.len(),
         vm.trail.len(),
-        vm.env.len(),
+        vm.ep,
     );
     vm.pc += 2;
     Ok(Step::Continue)
@@ -138,9 +138,9 @@ fn exec_try(vm: &mut Vm) -> Result<Step, RunError> {
 
 fn exec_retry(vm: &mut Vm) -> Result<Step, RunError> {
     let new_alt = read_imm(vm)?;
-    let env_ref = &mut vm.env;
+    let ep_slot = &mut vm.ep;
     let saved_cp = restore_top(&vm.choice, &mut vm.regs, &mut vm.heap, &mut vm.trail, |ep| {
-        env_ref.truncate(ep);
+        *ep_slot = ep;
     })
     .ok_or(RunError::EmptyChoiceStack)?;
     vm.cp = saved_cp;
@@ -150,9 +150,9 @@ fn exec_retry(vm: &mut Vm) -> Result<Step, RunError> {
 }
 
 fn exec_trust(vm: &mut Vm) -> Result<Step, RunError> {
-    let env_ref = &mut vm.env;
+    let ep_slot = &mut vm.ep;
     let saved_cp = restore_top(&vm.choice, &mut vm.regs, &mut vm.heap, &mut vm.trail, |ep| {
-        env_ref.truncate(ep);
+        *ep_slot = ep;
     })
     .ok_or(RunError::EmptyChoiceStack)?;
     vm.cp = saved_cp;
@@ -388,10 +388,15 @@ fn exec_unify_const(vm: &mut Vm) -> Result<Step, RunError> {
 }
 
 fn exec_allocate(vm: &mut Vm, n: u8) -> Result<Step, RunError> {
+    // Always push — never overwrite an existing env slot even if
+    // `ep < env.len()` after a backtrack. Older frames stay in the
+    // Vec so that a choice-point restore that moves `ep` back to a
+    // larger value brings them back into scope.
     vm.env.push(EnvFrame {
         saved_cp: vm.cp,
         ys: vec![0u32; n as usize],
     });
+    vm.ep = vm.env.len();
     vm.pc += 1;
     Ok(Step::Continue)
 }
@@ -407,15 +412,22 @@ fn exec_cut(vm: &mut Vm) -> Result<Step, RunError> {
 }
 
 fn exec_deallocate(vm: &mut Vm) -> Result<Step, RunError> {
-    let frame = vm.env.pop().ok_or(RunError::EmptyEnvStack)?;
-    vm.cp = frame.saved_cp;
+    if vm.ep == 0 {
+        return Err(RunError::EmptyEnvStack);
+    }
+    let saved_cp = vm.env[vm.ep - 1].saved_cp;
+    vm.cp = saved_cp;
+    vm.ep -= 1;
     vm.pc += 1;
     Ok(Step::Continue)
 }
 
 fn exec_get_y_var(vm: &mut Vm, yi: u8, ai: u8) -> Result<Step, RunError> {
     let ai = reg_index(ai)?;
-    let frame = vm.env.last_mut().ok_or(RunError::EmptyEnvStack)?;
+    if vm.ep == 0 {
+        return Err(RunError::EmptyEnvStack);
+    }
+    let frame = &mut vm.env[vm.ep - 1];
     let y = yi as usize;
     if y >= frame.ys.len() {
         return Err(RunError::BadYSlot { y: yi });
@@ -427,7 +439,10 @@ fn exec_get_y_var(vm: &mut Vm, yi: u8, ai: u8) -> Result<Step, RunError> {
 
 fn exec_put_y_val(vm: &mut Vm, yi: u8, ai: u8) -> Result<Step, RunError> {
     let ai = reg_index(ai)?;
-    let frame = vm.env.last().ok_or(RunError::EmptyEnvStack)?;
+    if vm.ep == 0 {
+        return Err(RunError::EmptyEnvStack);
+    }
+    let frame = &vm.env[vm.ep - 1];
     let y = yi as usize;
     if y >= frame.ys.len() {
         return Err(RunError::BadYSlot { y: yi });
