@@ -1,9 +1,19 @@
 # rust-to-prolog
 
-A port-aware Rust implementation of a Prolog compiler targeting the LAM
-VM. The compiler (`prologc`), the `.lam` assembler (`lamasm`), and a
-reference VM (`refvm`) are written so a downstream agent can translate
-each module to SNOBOL4 or PL/SW without creative redesign.
+A port-aware Rust implementation of a Prolog compiler and reference
+VM, targeting the LAM (Logic Abstract Machine) bytecode from the
+[`sw-cor24-prolog`](https://github.com/sw-embed/sw-cor24-prolog)
+project.
+
+**This is a full Rust reimplementation**, not a wrapper around the
+PL/SW-based LAM VM. `prologc` compiles a `.pl` file through
+tokenize → parse → WAM-style compile → `.lam` emission → 24-bit
+cell assembly → reference VM execution, all in-process in Rust.
+No PL/SW interpreter, no COR24 emulator, no external subprocesses.
+
+See [`docs/rationale.md`](docs/rationale.md) for the detailed
+answer to "why reimplement instead of calling into the real VM"
+and how we stay honest against the upstream specification.
 
 ## Quick start
 
@@ -12,28 +22,72 @@ cargo build --bin prologc
 ./target/debug/prologc examples/liar.pl      # → thursday
 ./target/debug/prologc examples/sum.pl       # → 6
 ./target/debug/prologc examples/member.pl    # → a / b / c
+./target/debug/prologc examples/ancestor.pl  # (silent HALT)
 ```
 
-See [`docs/demos.md`](docs/demos.md) for the full demo walkthrough and
-[`docs/limitations.md`](docs/limitations.md) for what the Prolog subset
-does and doesn't handle.
+Full walkthrough of each demo in [`docs/demos.md`](docs/demos.md).
+What the Prolog subset does and doesn't handle is in
+[`docs/limitations.md`](docs/limitations.md).
+
+## Relationship to sw-cor24-prolog
+
+This repo is the **source of an eventual mechanical port** to the
+upstream [`sw-cor24-prolog`](https://github.com/sw-embed/sw-cor24-prolog)
+project. The plan is module-by-module translation of the Rust
+pipeline to SNOBOL4 (tokenizer, parser, compiler, emitter,
+assembler) and, for the VM half, alignment with the existing
+PL/SW `lam.bin` already in that repo.
+
+To make the port mechanical rather than creative, every file in
+`src/` (except `src/refvm/` — a Rust-only test aid) follows the
+port-aware coding rules in [`docs/design.md`](docs/design.md):
+
+- `BoundedArr<T, N>` in place of `Vec` where the data maps to a
+  SNOBOL4 `ARRAY`.
+- `Vmap<N>` in place of `HashMap` (mirrors SNOBOL4's
+  `' key:val key:val '` string idiom).
+- Functions ≤50 lines, flat bodies, goto-shaped control flow.
+- String literals ≤120 chars (SNOBOL4's limit is 127).
+- Integer arithmetic only, no `async`, no `unsafe`, no trait
+  objects.
+
+Module-to-module mapping, acceptance criteria, and the open
+design questions the port agent will need to resolve are laid out
+in [`docs/porting-plan.md`](docs/porting-plan.md).
 
 ## Docs
 
-- [`architecture.md`](docs/architecture.md) — pipeline stages and
-  component boundaries.
-- [`design.md`](docs/design.md) — port-aware coding rules and internal
-  representations.
-- [`plan.md`](docs/plan.md) — the agentrail saga plan.
-- [`demos.md`](docs/demos.md) — how to run each example end-to-end.
-- [`limitations.md`](docs/limitations.md) — scope boundaries, known
-  gaps, fragile spots.
-- [`demo-plan-status.md`](docs/demo-plan-status.md) — current-state
-  snapshot.
+| File | Purpose |
+|---|---|
+| [`rationale.md`](docs/rationale.md) | Why Rust, what's shared with upstream, how we keep the two honest. |
+| [`demos.md`](docs/demos.md) | How to run the seven canonical demos end-to-end. |
+| [`limitations.md`](docs/limitations.md) | What the Prolog subset does, doesn't, and the known fragile spots. |
+| [`porting-plan.md`](docs/porting-plan.md) | Module-by-module translation target, parity contract, open port decisions. |
+| [`architecture.md`](docs/architecture.md) | Pipeline stages, component boundaries, data flow. |
+| [`design.md`](docs/design.md) | Port-aware coding rules, internal representations. |
+| [`plan.md`](docs/plan.md) | The agentrail saga plan (17 planned steps). |
+| [`demo-plan-status.md`](docs/demo-plan-status.md) | Current-state snapshot — step progress, real-VM status. |
 
 ## Running the tests
 
 ```
-cargo test                    # fast lib + integration tests
-scripts/run-tests.sh          # same, plus port-audit
+cargo test                    # 119 lib + 36 integration tests
+scripts/run-tests.sh          # same, plus the port-audit gate
 ```
+
+## CI signals
+
+`scripts/run-tests.sh` is the single green/red line:
+
+```
+$ scripts/run-tests.sh
+test result: ok. 119 passed; 0 failed
+test result: ok. 36 passed; 0 failed
+port-audit: clean
+```
+
+Any of those three regressing blocks the current saga step.
+
+## License
+
+MIT. See [`LICENSE`](LICENSE).
