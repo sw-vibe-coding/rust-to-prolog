@@ -1,3 +1,7 @@
 /target/
 /build/
 .DS_Store
+
+# web-ui build artefacts
+/web-ui/target/
+/web-ui/dist/

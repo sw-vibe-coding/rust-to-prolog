@@ -1,0 +1,260 @@
+/* rust-to-prolog — dark theme */
+
+:root {
+  --bg: #0e1116;
+  --panel: #161b22;
+  --panel-border: #30363d;
+  --text: #d4d4d4;
+  --text-dim: #8b949e;
+  --accent: #8923bc;
+  --accent-hover: #a43ed8;
+  --error: #f85149;
+  --ok: #3fb950;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+}
+
+.page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.split > .panel {
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.chrome h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  font-family: var(--mono);
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.controls select,
+button {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-family: var(--sans);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.1s, background 0.1s;
+}
+
+.controls select:hover,
+button:hover {
+  border-color: var(--accent);
+}
+
+.controls button {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+  font-weight: 600;
+  min-width: 64px;
+}
+
+.controls button:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.controls button.secondary {
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--panel-border);
+  font-weight: 500;
+}
+
+.controls button.secondary:hover {
+  border-color: var(--accent);
+  background: var(--panel);
+  color: var(--accent);
+}
+
+select:disabled,
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.panel label {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+
+textarea.src {
+  width: 100%;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  tab-size: 4;
+}
+
+textarea.src:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.status {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 6px 0;
+  border-top: 1px solid var(--panel-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-error {
+  color: var(--error);
+}
+
+pre.out {
+  margin: 0;
+  background: #0a0d12;
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.5;
+  min-height: 120px;
+  max-height: 480px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.about {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.about p {
+  margin: 0;
+}
+
+.about a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.about a:hover {
+  text-decoration: underline;
+  color: var(--accent-hover);
+}
+
+kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  color: var(--text);
+}
+
+.github-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 100;
+}
+.github-corner svg {
+  fill: var(--accent);
+  color: var(--bg);
+}
+.github-corner:hover .octo-arm {
+  animation: octocat-wave 560ms ease-in-out;
+}
+@keyframes octocat-wave {
+  0%, 100% { transform: rotate(0); }
+  20%, 60% { transform: rotate(-25deg); }
+  40%, 80% { transform: rotate(10deg); }
+}
+
+footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 20px;
+  font-size: 0.75em;
+  color: var(--text-dim);
+  border-top: 1px solid var(--panel-border);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+footer a:hover {
+  text-decoration: underline;
+}
+.footer-sep { color: #444; }
