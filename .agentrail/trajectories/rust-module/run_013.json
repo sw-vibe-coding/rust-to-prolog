@@ -1,0 +1,11 @@
+{
+  "task_type": "rust-module",
+  "state": {
+    "number": 16,
+    "step": "negation"
+  },
+  "action": "cargo test green gate; chose the TRY+TRUST+FAIL+alt+TRUST compilation to avoid depending on our non-scoped CUT-all (from step 015) — avoids the classic WAM 'call(G), !, fail' idiom that would fail nested; fixed a parse bug where '\\+ X = Y' was parsing as '=(\\+(X), Y)' by having Token::Not recurse into parse_cmp_expr instead of parse_goal; plumbed pname/clause_idx through emit_clause_body / emit_query_clause into RegMap so neg labels are globally unique; scratch X-reg reused for the unification pattern (safe: value is consumed before any CALL).",
+  "result": "success",
+  "reward": 1,
+  "timestamp": "2026-04-18T20:26:33"
+}

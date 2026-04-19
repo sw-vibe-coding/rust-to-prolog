@@ -20,7 +20,7 @@ use thiserror::Error;
 
 pub const MAX_CELLS: usize = 4096;
 
-const ATOM_CAP: usize = 24;
+const ATOM_CAP: usize = 48;
 const LABEL_CAP: usize = 48;
 const ASM_MAX_ATOMS: usize = 64;
 const ASM_MAX_LABELS: usize = 128;

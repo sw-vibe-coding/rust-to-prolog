@@ -1,6 +1,6 @@
 number = 16
 slug = "negation"
-status = "in-progress"
+status = "completed"
 description = '''
 Add negation-as-failure (\\+ Goal).
 
@@ -8,5 +8,6 @@ Compilation: parse.rs already produces S...'''
 role = "production"
 context_files = []
 created_at = "2026-04-16T13:09:29"
+completed_at = "2026-04-18T20:26:33"
 task_type = "rust-module"
-commits = []
+commits = ["397afd62e9495bcf466ab8bd378057a231ecbc2d"]

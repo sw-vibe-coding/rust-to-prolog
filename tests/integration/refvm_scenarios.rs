@@ -383,6 +383,21 @@ fn compiled_color_prints_all_colors_via_backtracking() {
 }
 
 #[test]
+fn compiled_liar_puzzle_solves_to_thursday() {
+    // The big one: "The Lion Lies on Tuesdays". Full pipeline
+    // through tokenize -> parse -> compile -> emit -> asm -> refvm.
+    // Exercises multi-clause fact predicates (day/1 has 7 clauses,
+    // yesterday/2 has 7, lion_lies has 3, etc.), multi-clause rules
+    // (lion_says_yesterday_lied has 2 clauses with ALLOCATE + 3-goal
+    // bodies), nested backtracking across the whole query, and
+    // builtins (write/1, nl/0). Expected answer: thursday.
+    let src = include_str!("../../examples/liar.pl");
+    let (r, out) = run_with_compiled_atoms(src);
+    assert_eq!(r, RunResult::Halt);
+    assert_eq!(out, "thursday\n");
+}
+
+#[test]
 fn compiled_negation_fails_when_goal_succeeds() {
     // ne(red, red) should fail because red = red unifies.
     let src = include_str!("../../examples/neq.pl");
