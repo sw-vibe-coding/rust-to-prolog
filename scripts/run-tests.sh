@@ -11,6 +11,7 @@ ROOT="$(cd "$HERE/.." && pwd)"
 cd "$ROOT"
 cargo test --quiet
 "$HERE/port-audit.sh"
+"$HERE/port-audit-tests/run.sh"
 
 if [[ "${1:-}" == "--full" ]]; then
     cargo test --quiet -- --ignored

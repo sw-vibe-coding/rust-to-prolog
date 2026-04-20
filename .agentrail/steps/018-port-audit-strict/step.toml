@@ -1,6 +1,6 @@
 number = 18
 slug = "port-audit-strict"
-status = "pending"
+status = "in-progress"
 description = "Tighten scripts/port-audit.sh to enforce the full rule set from docs/design.m..."
 role = "meta"
 context_files = []
