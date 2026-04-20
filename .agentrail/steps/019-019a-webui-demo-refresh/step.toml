@@ -1,0 +1,11 @@
+number = 19
+slug = "019a-webui-demo-refresh"
+status = "in-progress"
+description = """
+Refresh the web UI demos and add file-upload support.
+
+Three concrete changes..."""
+role = "production"
+context_files = []
+created_at = "2026-04-20T10:11:58"
+commits = []

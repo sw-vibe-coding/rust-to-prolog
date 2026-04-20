@@ -31,11 +31,26 @@ lamasm <file.lam> -o out.bin    Two-pass assembler → flat LE u32.
 lamasm <file.lam> --verbose     Dump cells to stderr.
 ```
 
-## The seven canonical demos
+## The canonical demos
 
 Each is in `examples/` and has a corresponding integration test
-(`tests/integration/refvm_scenarios.rs`) that runs on every
-`cargo test`.
+(`tests/integration/refvm_scenarios.rs`) plus a `reg-rs` CLI
+baseline (`reg-rs/r2p_<name>.{rgt,out}`) that runs on every
+`cargo test` / `scripts/run-regression.sh`.
+
+### 0. Hello — the first program
+
+```
+prologc examples/hello.pl
+# → hello_world
+#   -- HALT
+```
+
+`hello :- write(hello_world), nl.` Uses the bareword atom
+`hello_world` because our subset doesn't support single-quoted
+atoms (`'Hello World!'`). See
+[`limitations.md`](limitations.md) §"No quoted atoms, no strings"
+for the gap and the plan to lift it.
 
 ### 1. Ancestor — recursion + pattern match
 
@@ -215,6 +230,15 @@ prologc /tmp/your.pl --cells      # inspect 24-bit bytecode
 The `--lam` output is usually the most useful — it shows the
 instruction stream the compiler emitted, which you can hand-trace
 against the VM spec in `sw-cor24-prolog/docs/vm-spec.md`.
+
+### In the browser
+
+The [live demo](https://sw-vibe-coding.github.io/rust-to-prolog/)
+has an **Upload .pl** button next to Run / Reset / Clear. It opens
+a file picker, reads the selected `.pl` client-side via
+`FileReader`, and replaces the source textarea. Nothing is
+uploaded to a server — the whole pipeline runs in the WASM
+bundle. Drag-and-drop isn't wired up; use the button.
 
 ## How the demos get run in CI
 

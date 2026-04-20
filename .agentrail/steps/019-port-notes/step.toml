@@ -1,9 +1,0 @@
-number = 19
-slug = "port-notes"
-status = "pending"
-description = "Write docs/port-notes.md: a per-module guide for the downstream agent that wi..."
-role = "meta"
-context_files = []
-created_at = "2026-04-16T13:11:11"
-task_type = "port-prep"
-commits = []

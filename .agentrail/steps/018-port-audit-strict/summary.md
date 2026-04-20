@@ -1,0 +1,1 @@
+Strict port-audit.sh enforcing HashMap/BTreeMap/Box/dyn/async/unsafe/f32/f64 bans, >50-line fn bodies (non-test), >120-char strings, and Cargo.toml dep whitelist (thiserror/anyhow/clap-bins-only). 10 fixture subdirs under scripts/port-audit-tests/ + harness; no src/ refactors needed since existing long fns were #[test]-exempt.

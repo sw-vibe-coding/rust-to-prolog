@@ -1,4 +1,5 @@
-use web_sys::{HtmlSelectElement, HtmlTextAreaElement, KeyboardEvent};
+use gloo::file::{callbacks::FileReader, File};
+use web_sys::{HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement, KeyboardEvent, MouseEvent};
 use yew::prelude::*;
 
 pub mod demos;
@@ -14,6 +15,8 @@ pub enum Msg {
     Reset,
     Clear,
     KeyDown(KeyboardEvent),
+    FileChanged(Event),
+    FileLoaded(String),
 }
 
 pub struct App {
@@ -22,6 +25,8 @@ pub struct App {
     output: String,
     status: String,
     error: bool,
+    file_input_ref: NodeRef,
+    _file_reader: Option<FileReader>,
 }
 
 impl App {
@@ -56,6 +61,8 @@ impl Component for App {
             output: String::new(),
             status: "idle".into(),
             error: false,
+            file_input_ref: NodeRef::default(),
+            _file_reader: None,
         }
     }
 
@@ -90,6 +97,32 @@ impl Component for App {
                     ctx.link().send_message(Msg::Run);
                 }
                 false
+            }
+            Msg::FileChanged(e) => {
+                let input: HtmlInputElement = e.target_unchecked_into();
+                if let Some(files) = input.files() {
+                    if let Some(file) = files.get(0) {
+                        let file = File::from(file);
+                        let link = ctx.link().clone();
+                        let reader =
+                            gloo::file::callbacks::read_as_text(&file, move |result| {
+                                if let Ok(text) = result {
+                                    link.send_message(Msg::FileLoaded(text));
+                                }
+                            });
+                        self._file_reader = Some(reader);
+                    }
+                }
+                // Reset so the same file can be re-selected.
+                input.set_value("");
+                false
+            }
+            Msg::FileLoaded(contents) => {
+                self.source = contents;
+                self.output.clear();
+                self.status = "idle".into();
+                self.error = false;
+                true
             }
         }
     }
@@ -149,6 +182,21 @@ impl Component for App {
                         <button onclick={on_run}>{ "Run" }</button>
                         <button class="secondary" onclick={on_reset}>{ "Reset" }</button>
                         <button class="secondary" onclick={on_clear}>{ "Clear" }</button>
+                        <button class="secondary" onclick={
+                            let file_ref = self.file_input_ref.clone();
+                            Callback::from(move |_: MouseEvent| {
+                                if let Some(input) = file_ref.cast::<HtmlInputElement>() {
+                                    input.click();
+                                }
+                            })
+                        }>{ "Upload .pl" }</button>
+                        <input
+                            type="file"
+                            accept=".pl,.prolog"
+                            ref={self.file_input_ref.clone()}
+                            style="display:none"
+                            onchange={ctx.link().callback(Msg::FileChanged)}
+                        />
                     </div>
                 </header>
                 <div class="split">

@@ -208,9 +208,63 @@ and rules are compile-time.
 
 No exception handling.
 
-### No strings or chars
+### No quoted atoms, no strings
 
-Only atoms and integers. "hello" doesn't parse.
+Atoms in this subset are bare identifiers only:
+
+- **First char:** `a`-`z` or `_`
+- **Rest:** `[a-zA-Z0-9_]*`
+
+These parse:
+
+```prolog
+hello           foo_bar         x0          _aux123
+```
+
+These **do not** parse:
+
+```prolog
+'Hello World!'         ← single-quoted atom:  tokenize InvalidChar
+'x'                    ← even a single char  : InvalidChar
+"hello"                ← double-quoted string: InvalidChar
+hello!                 ← `!` tokenises as the cut operator
+hello world            ← `world` is a second atom (space separator)
+```
+
+The tokenizer flags the quote character at the offending position:
+
+```
+Error: tokenize: InvalidChar { ch: '\'', pos: 18 }
+```
+
+**Why we haven't added quoted atoms.** It's a small tokenizer
+change in isolation, but the port cost is real:
+
+- `BoundedStr<32>` atoms assume ASCII identifier chars. Accepting
+  spaces, punctuation, or arbitrary bytes means the atom table now
+  stores arbitrary strings.
+- The `.lam` atom directive is `.atom N name` where `name` is a
+  single bareword. Quoted atoms would need a quoting/escaping
+  convention in both the Rust emitter and `lam_asm.py`.
+- SNOBOL4 `SYMMAX=64` atoms and the tokenize/codegen SNO sources
+  assume identifier-shaped atoms. Retrofitting quoted atoms
+  ripples through to the port target.
+- `write/1` currently prints atoms bare. Round-tripping would
+  require a `writeq/1` variant or runtime re-quoting logic.
+
+**Workaround.** Compose bareword atoms:
+
+```prolog
+hello :- write(hello_world), nl.        % works
+hello :- write(hello), write(world).    % works (no space between)
+```
+
+**Planned.** A dedicated step (`020-quoted-atoms`, see the
+`agentrail` plan) adds single-quoted atoms across tokenize → parse
+→ emitter → `lam_asm.py` with a `writeq/1` companion. That step
+also decides whether to introduce a separate `string/1` term type
+for user-facing text, or to keep quoted atoms as the only string-
+ish vehicle.
 
 ### No operator precedence beyond the five built in
 

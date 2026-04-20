@@ -36,6 +36,10 @@ ancestor(X, Y) :- parent(X, Z), ancestor(Z, Y).\n\
         source: include_str!("../../examples/fib.pl"),
     },
     Demo {
+        name: "hello (Hello World)",
+        source: include_str!("../../examples/hello.pl"),
+    },
+    Demo {
         name: "liar (Lion Lies on Tuesdays)",
         source: include_str!("../../examples/liar.pl"),
     },

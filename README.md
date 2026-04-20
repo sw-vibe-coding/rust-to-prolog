@@ -2,8 +2,11 @@
 
 **Live demo:** <https://sw-vibe-coding.github.io/rust-to-prolog/> —
 the full Rust compiler + reference VM running in your browser as WASM.
-Twelve canonical Prolog demos (ancestor, append, color, fib, **liar**,
-max, member, neq × 2, path × 2, sum) are bundled; pick one, hit Run.
+Thirteen canonical Prolog demos (hello, ancestor, append, color, fib,
+**liar**, max, member, neq × 2, path × 2, sum) ship bundled; pick one
+from the dropdown and hit **Run**. **Upload .pl** takes any local
+`.pl` file and loads it into the editor (client-side, nothing uploads
+to a server).
 
 [![rust-to-prolog live demo: liar puzzle solved to "thursday"](images/screenshot.png?ts=1776578699034)](https://sw-vibe-coding.github.io/rust-to-prolog/)
 
@@ -26,6 +29,7 @@ and how we stay honest against the upstream specification.
 
 ```
 cargo build --bin prologc
+./target/debug/prologc examples/hello.pl     # → hello_world
 ./target/debug/prologc examples/liar.pl      # → thursday
 ./target/debug/prologc examples/sum.pl       # → 6
 ./target/debug/prologc examples/member.pl    # → a / b / c

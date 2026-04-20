@@ -1,0 +1,9 @@
+number = 21
+slug = "integration-ancestor"
+status = "blocked"
+description = "End-to-end integration test: examples/ancestor.pl compiled by Rust pipeline r..."
+role = "validation"
+context_files = []
+created_at = "2026-04-16T13:08:48"
+task_type = "integration-test"
+commits = []
